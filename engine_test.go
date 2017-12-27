@@ -35,12 +35,12 @@ func TestMain(m *testing.M) {
 func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	objectName, path, file, err := createFile()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	err = writeToJunkFile(file)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	e := Engine{
@@ -51,26 +51,26 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	version := 1
 	err = e.saveObject(file, objectName, version)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	loaded, err := e.loadBlockInfos(objectName, version)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	correctChecksum, err := getChecksumForPath(path, JunkFileSizeInMB*1024*1024)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	computedChecksum, err := getChecksumForBlocks(loaded)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	if computedChecksum != correctChecksum {
-		t.Error("Checksums were not equal")
+		t.Fatal("Checksums were not equal")
 	}
 
 	os.Remove(path)
