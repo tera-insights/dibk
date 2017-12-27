@@ -98,7 +98,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	correctBlocks, err := e.loadBlockInfos(objectName, 1)
+	correctVersionOneBlocks, err := e.loadBlockInfos(objectName, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +108,16 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	fmt.Printf("nBlocks = %d\n", nBlocks)
+
 	newBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
 	oldBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
-	n, err := file.Read(oldBytes)
+	file, err = os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = file.Read(oldBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,14 +127,14 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 	nToChange := 2
 	changedIndices := make([]int, nToChange)
 	for i := 0; i < len(changedIndices); i++ {
+		changedIndices[i] = -1
 		index := rand.Int() % nBlocks
-
-		for !isNew(changedIndices, i) {
-			index := rand.Int() % nBlocks
+		for !isNew(changedIndices, index) {
+			index = rand.Int() % nBlocks
 		}
 		changedIndices[i] = index
 		p := make([]byte, BlockSizeInKB*1024)
-		_, err := rand.Read(p)
+		_, err = rand.Read(p)
 		for j := 0; j < BlockSizeInKB*1024; j++ {
 			offset := index*BlockSizeInKB*1024 + j
 			newBytes[offset] = p[j]
@@ -139,7 +146,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n, err = newFile.Write(newBytes)
+	_, err = newFile.Write(newBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,8 +156,26 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if correctVersionOneBlocks != fetchedVersionOneBlocks {
-		t.Fatalf("Original version one blocks did not equal those we just fetched")
+	fetchedVersionOneBlocks, err := e.loadBlockInfos(objectName, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(correctVersionOneBlocks) != len(fetchedVersionOneBlocks) {
+		t.Fatalf("Lengths of blocks differ")
+	}
+
+	for i := 0; i < len(correctVersionOneBlocks); i++ {
+		correct := correctVersionOneBlocks[i]
+		fetched := fetchedVersionOneBlocks[i]
+		isCorrect := (correct.BlockIndex == fetched.BlockIndex &&
+			correct.Location == fetched.Location &&
+			correct.ObjectName == fetched.ObjectName &&
+			correct.SHA256Checksum == fetched.SHA256Checksum &&
+			correct.Version == fetched.Version)
+		if !isCorrect {
+			t.Fatalf("Original version one blocks did not equal those we just fetched")
+		}
 	}
 
 	fetchedVersionTwoBlocks, err := e.loadBlockInfos(objectName, 2)
