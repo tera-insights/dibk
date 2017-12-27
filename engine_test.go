@@ -6,7 +6,9 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // Needed for Gorm
@@ -15,7 +17,7 @@ import (
 const DBType = "sqlite3"
 const DBName = "TEST_DB"
 const JunkFileSizeInMB = 2
-const BlockSizeInKB = 4
+const BlockSizeInKB = 1024
 
 var testDB *gorm.DB
 
@@ -75,10 +77,10 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 }
 
 func createFile() (string, string, *os.File, error) {
-	fileName := "dummy_file_" + string(rand.Int())
+	fileName := "dummy_file_" + strconv.Itoa(rand.Int())
 	filePath := path.Join(os.TempDir(), fileName)
 	for !isFileNew(filePath) {
-		fileName = "dummy_file_" + string(rand.Int())
+		fileName = "dummy_file_" + strconv.Itoa(rand.Int())
 		filePath = path.Join(os.TempDir(), fileName)
 	}
 	file, err := os.Create(filePath)
@@ -113,8 +115,20 @@ func getChecksumForBlocks(blocks []Block) (string, error) {
 }
 
 func setup() error {
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	db, err := gorm.Open(DBType, DBName)
+	if err != nil {
+		return err
+	}
+
 	testDB = db
+	err = testDB.AutoMigrate(&ObjectVersion{}).Error
+	if err != nil {
+		return err
+	}
+
+	err = testDB.AutoMigrate(&Block{}).Error
 	return err
 }
 
@@ -125,7 +139,7 @@ func teardown() error {
 	}
 
 	if DBType == "sqlite3" {
-		return os.Remove(DBName + DBType)
+		return os.Remove(DBName)
 	}
 	return nil
 }

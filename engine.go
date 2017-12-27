@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"strconv"
 
 	"github.com/jinzhu/gorm"
 )
@@ -82,7 +83,7 @@ func (e *Engine) loadBlockInfos(objectID string, version int) ([]Block, error) {
 }
 
 func (e *Engine) writeBlock(source *os.File, id string, version int, index int) (string, error) {
-	blockName := id + "-" + string(version) + ".dibk"
+	blockName := id + "-" + strconv.Itoa(version) + "-" + strconv.Itoa(index) + ".dibk"
 	path := path.Join(e.storageLocation, blockName)
 	if !isFileNew(path) {
 		return path, fmt.Errorf("Block with name %s already exists", path)
@@ -130,7 +131,7 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]str
 
 func (e *Engine) saveObject(file *os.File, id string, version int) error {
 	var count int
-	err := e.db.Where(&ObjectVersion{
+	err := e.db.Model(&ObjectVersion{}).Where(&ObjectVersion{
 		ID:      id,
 		Version: version,
 	}).Count(&count).Error
