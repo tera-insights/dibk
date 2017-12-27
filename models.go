@@ -11,7 +11,7 @@ type Block struct {
 
 // ObjectVersion represents a version of a binary object.
 type ObjectVersion struct {
-	ID             string `gorm:"primary_key"`
+	Name           string `gorm:"primary_key"`
 	Version        int
 	NumberOfBlocks int
 }
