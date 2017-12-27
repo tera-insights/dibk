@@ -108,8 +108,6 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("nBlocks = %d\n", nBlocks)
-
 	newBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
 	oldBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
 	file, err = os.Open(path)
