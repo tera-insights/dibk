@@ -112,12 +112,20 @@ func (e *Engine) writeBlock(source *os.File, id string, version int, index int) 
 	return path, err
 }
 
-func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]string, error) {
+func (e *Engine) getNumBlocksInFile(file *os.File) (int, error) {
 	stat, err := file.Stat()
 	if err != nil {
-
+		return -1, err
 	}
-	nBlocks := int(math.Ceil(float64(stat.Size()) / float64(e.blockSizeInKB*1024)))
+	return int(math.Ceil(float64(stat.Size()) / float64(e.blockSizeInKB*1024))), nil
+}
+
+func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]string, error) {
+	nBlocks, err := e.getNumBlocksInFile(file)
+	if err != nil {
+		return []string{}, err
+	}
+
 	paths := make([]string, nBlocks)
 	for i := 0; i < nBlocks; i++ {
 		path, err := e.writeBlock(file, id, version, i)

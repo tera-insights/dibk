@@ -33,7 +33,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestUploadingAndRetrievingSameFile(t *testing.T) {
-	objectName, path, file, err := createFile()
+	objectName, path, file, err := createTemporaryFile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,128 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	os.Remove(path)
 }
 
-func createFile() (string, string, *os.File, error) {
+func TestChangingBlocksWithSameSizeFile(t *testing.T) {
+	e := Engine{
+		db:              testDB,
+		blockSizeInKB:   BlockSizeInKB,
+		storageLocation: os.TempDir(),
+	}
+
+	objectName, path, file, err := createTemporaryFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = writeToJunkFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = e.saveObject(file, objectName, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correctBlocks, err := e.loadBlockInfos(objectName, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nBlocks, err := e.getNumBlocksInFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
+	oldBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
+	n, err := file.Read(oldBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	copy(newBytes, oldBytes)
+
+	nToChange := 2
+	changedIndices := make([]int, nToChange)
+	for i := 0; i < len(changedIndices); i++ {
+		index := rand.Int() % nBlocks
+
+		for !isNew(changedIndices, i) {
+			index := rand.Int() % nBlocks
+		}
+		changedIndices[i] = index
+		p := make([]byte, BlockSizeInKB*1024)
+		_, err := rand.Read(p)
+		for j := 0; j < BlockSizeInKB*1024; j++ {
+			offset := index*BlockSizeInKB*1024 + j
+			newBytes[offset] = p[j]
+		}
+	}
+
+	_, newPath, newFile, err := createTemporaryFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err = newFile.Write(newBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = e.saveObject(newFile, objectName, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if correctVersionOneBlocks != fetchedVersionOneBlocks {
+		t.Fatalf("Original version one blocks did not equal those we just fetched")
+	}
+
+	fetchedVersionTwoBlocks, err := e.loadBlockInfos(objectName, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(fetchedVersionTwoBlocks) != nBlocks {
+		t.Fatalf("Did not load proper number of blocks for version two")
+	}
+
+	for i := 0; i < len(fetchedVersionTwoBlocks); i++ {
+		block := fetchedVersionTwoBlocks[i]
+		for j := 0; j < len(changedIndices); j++ {
+			isCorrectVersion := (j == i && block.Version == 2) ||
+				(j != i && block.Version == 1)
+			if !isCorrectVersion {
+				t.Fatalf("Block versions did not match what was changed")
+			}
+		}
+	}
+
+	fileChecksum, err := getChecksumForPath(newPath, JunkFileSizeInMB*1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blocksChecksum, err := getChecksumForBlocks(fetchedVersionTwoBlocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileChecksum != blocksChecksum {
+		t.Fatalf("File and block checksums were not equal")
+	}
+}
+
+func isNew(a []int, b int) bool {
+	for i := 0; i < len(a); i++ {
+		if a[i] == b {
+			return false
+		}
+	}
+	return true
+}
+
+func createTemporaryFile() (string, string, *os.File, error) {
 	fileName := "dummy_file_" + strconv.Itoa(rand.Int())
 	filePath := path.Join(os.TempDir(), fileName)
 	for !isFileNew(filePath) {
