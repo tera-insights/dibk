@@ -187,12 +187,16 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 
 	for i := 0; i < len(fetchedVersionTwoBlocks); i++ {
 		block := fetchedVersionTwoBlocks[i]
+		isChangedBlock := false
 		for j := 0; j < len(changedIndices); j++ {
-			isCorrectVersion := (j == i && block.Version == 2) ||
-				(j != i && block.Version == 1)
-			if !isCorrectVersion {
-				t.Fatalf("Block versions did not match what was changed")
+			if j == i {
+				isChangedBlock = true
 			}
+		}
+		isCorrectVersion := (isChangedBlock && block.Version == 2) ||
+			(!isChangedBlock && block.Version == 1)
+		if !isCorrectVersion {
+			t.Fatalf("Block versions did not match what was changed")
 		}
 	}
 

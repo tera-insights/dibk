@@ -55,7 +55,7 @@ func getLatestBlocks(ov ObjectVersion, all []Block) ([]Block, error) {
 		isNewer := old == Block{} || old.Version < current.Version
 		if isNewer {
 			latest[current.BlockIndex] = current
-			written[i] = true
+			written[current.BlockIndex] = true
 		}
 	}
 
@@ -173,7 +173,7 @@ func (e *Engine) getNumBlocksInFile(file *os.File) (int, error) {
 
 func (e *Engine) isObjectNew(name string) (bool, error) {
 	var count int64
-	err := e.db.Where(&ObjectVersion{
+	err := e.db.Model(&ObjectVersion{}).Where(&ObjectVersion{
 		Name: name,
 	}).Count(&count).Error
 	return count == 0, err
@@ -214,17 +214,22 @@ func (e *Engine) shouldWriteBlock(source *os.File, name string, version, blockIn
 		return false, err
 	}
 
-	isBlockChanged := latestBlock.SHA256Checksum == passedBlockChecksum
+	isBlockChanged := latestBlock.SHA256Checksum != passedBlockChecksum
 	return isBlockChanged, nil
 }
 
-func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]string, error) {
+type writeResult struct {
+	path  string
+	isNew bool
+}
+
+func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]writeResult, error) {
 	nBlocks, err := e.getNumBlocksInFile(file)
 	if err != nil {
-		return []string{}, err
+		return []writeResult{}, err
 	}
 
-	paths := make([]string, nBlocks)
+	paths := make([]writeResult, nBlocks)
 	for i := 0; i < nBlocks; i++ {
 		shouldWrite, err := e.shouldWriteBlock(file, id, version, i)
 		if err != nil {
@@ -233,7 +238,7 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]str
 
 		if shouldWrite {
 			path, err := e.writeBlock(file, id, version, i)
-			paths[i] = path
+			paths[i] = writeResult{path, true}
 			if err != nil {
 				return paths, err
 			}
@@ -242,7 +247,7 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]str
 			if err != nil {
 				return paths, err
 			}
-			paths[i] = info.Location
+			paths[i] = writeResult{info.Location, false}
 		}
 
 	}
@@ -264,7 +269,7 @@ func (e *Engine) saveObject(file *os.File, name string, version int) error {
 		return fmt.Errorf("Not a new combination of version and object ID")
 	}
 
-	blockPaths, err := e.writeFileInBlocks(file, name, version)
+	results, err := e.writeFileInBlocks(file, name, version)
 	if err != nil {
 		return err
 	}
@@ -272,23 +277,28 @@ func (e *Engine) saveObject(file *os.File, name string, version int) error {
 	err = e.db.Create(&ObjectVersion{
 		Name:           name,
 		Version:        version,
-		NumberOfBlocks: len(blockPaths),
+		NumberOfBlocks: len(results),
 	}).Error
 	if err != nil {
 		return err
 	}
 
-	for i := 0; i < len(blockPaths); i++ {
-		checksum, err := getChecksumForPath(blockPaths[i], e.blockSizeInKB*1024)
+	for i := 0; i < len(results); i++ {
+		if !results[i].isNew {
+			continue
+		}
+
+		checksum, err := getChecksumForPath(results[i].path, e.blockSizeInKB*1024)
 		if err != nil {
 			return err
 		}
 
 		b := Block{
 			SHA256Checksum: checksum,
-			Location:       blockPaths[i],
+			Location:       results[i].path,
 			BlockIndex:     i,
 			ObjectName:     name,
+			Version:        version,
 		}
 		err = e.db.Create(&b).Error
 		if err != nil {
