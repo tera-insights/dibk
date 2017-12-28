@@ -1,6 +1,6 @@
 #!/bin/bash -e 
 
-go build ../cmd/dibk.go
+go build $PATH_TO_EXECUTABLE
 
 dd bs=1M count=1 if=/dev/urandom of=a_v1.bin status=none
 

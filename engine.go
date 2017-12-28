@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite" // for gorm
 )
 
 // Configuration defines the paths and variables needed to run dibk.
@@ -38,7 +39,11 @@ func MakeEngine(c Configuration) (Engine, error) {
 	}
 
 	err = db.AutoMigrate(Block{}).Error
-	return Engine{}, err
+	return Engine{
+		db:              db,
+		blockSizeInKB:   c.BlockSizeInKB,
+		storageLocation: c.StorageLocation,
+	}, err
 }
 
 func (e *Engine) getObjectVersion(name string, version int) (ObjectVersion, error) {

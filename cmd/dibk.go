@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/urfave/cli"
 )
 
@@ -75,7 +76,12 @@ func main() {
 }
 
 func readConfig() (dibk.Configuration, error) {
-	file, err := os.Open("dibk_config.json")
+	path, found := os.LookupEnv("DIBK_CONFIG")
+	if !found {
+		return dibk.Configuration{}, fmt.Errorf("No environment variable DIBK_CONFIG")
+	}
+
+	file, err := os.Open(path)
 	if err != nil {
 		return dibk.Configuration{}, err
 	}
@@ -116,7 +122,7 @@ func retrieve(c *cli.Context) error {
 		return err
 	}
 
-	file, err := os.Open(outputPath)
+	file, err := os.Create(outputPath)
 	if err != nil {
 		return err
 	}
