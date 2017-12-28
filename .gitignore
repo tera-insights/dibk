@@ -31,3 +31,5 @@ dibk
 
 # Binary test data
 tests/
+
+vendor/

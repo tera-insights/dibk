@@ -1,0 +1,8 @@
+package: dibk
+import:
+- package: github.com/jinzhu/gorm
+  version: v1.0
+  subpackages:
+  - dialects/sqlite
+- package: github.com/urfave/cli
+  version: v1.20.0
