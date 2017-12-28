@@ -46,7 +46,7 @@ func getLatestBlocks(ov ObjectVersion, all []Block) ([]Block, error) {
 	written := make([]bool, ov.NumberOfBlocks)
 	for i := 0; i < len(all); i++ {
 		current := all[i]
-		isRelevant := current.Version <= ov.Version
+		isRelevant := current.Version <= ov.Version && current.BlockIndex < ov.NumberOfBlocks
 		if !isRelevant {
 			continue
 		}
