@@ -249,7 +249,6 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]wri
 			}
 			paths[i] = writeResult{info.Location, false}
 		}
-
 	}
 	return paths, nil
 }

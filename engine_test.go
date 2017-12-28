@@ -93,13 +93,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 	}
 
 	newBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
-	oldBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
-	file, err = os.Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = file.Read(oldBytes)
+	oldBytes, err := read(path, nBlocks*BlockSizeInKB*1024)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +167,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		block := fetchedVersionTwoBlocks[i]
 		isChangedBlock := false
 		for j := 0; j < len(changedIndices); j++ {
-			if j == i {
+			if changedIndices[j] == i {
 				isChangedBlock = true
 			}
 		}
