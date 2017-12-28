@@ -11,11 +11,34 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+// Configuration defines the paths and variables needed to run dibk.
+type Configuration struct {
+	DBPath          string `json:"db_path"`
+	BlockSizeInKB   int    `json:"block_size_in_kb"`
+	StorageLocation string `json:"storage_location"`
+}
+
 // Engine interacts with the database.
 type Engine struct {
 	db              *gorm.DB
 	blockSizeInKB   int
 	storageLocation string
+}
+
+// MakeEngine onnects to the specified DB and runs the `AutoMigrate` steps.
+func MakeEngine(c Configuration) (Engine, error) {
+	db, err := gorm.Open("sqlite3", c.DBPath)
+	if err != nil {
+		return Engine{}, err
+	}
+
+	err = db.AutoMigrate(ObjectVersion{}).Error
+	if err != nil {
+		return Engine{}, err
+	}
+
+	err = db.AutoMigrate(Block{}).Error
+	return Engine{}, err
 }
 
 func (e *Engine) getObjectVersion(name string, version int) (ObjectVersion, error) {
