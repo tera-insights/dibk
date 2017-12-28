@@ -16,7 +16,7 @@ import (
 
 const DBType = "sqlite3"
 const DBName = "TEST_DB"
-const JunkFileSizeInMB = 2
+const DefaultJunkFileSizeInMB = 2
 const BlockSizeInKB = 1024
 
 var testDB *gorm.DB
@@ -44,7 +44,7 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	correctChecksum, err := getChecksumForPath(path, JunkFileSizeInMB*1024*1024)
+	correctChecksum, err := getChecksumForPath(path, DefaultJunkFileSizeInMB*1024*1024)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,17 +117,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		}
 	}
 
-	_, newPath, newFile, err := createTemporaryFile()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = newFile.Write(newBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = e.saveObject(newFile, objectName, 2)
+	newPath, err := createAndSaveFile(objectName, newBytes, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,21 +127,8 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(correctVersionOneBlocks) != len(fetchedVersionOneBlocks) {
-		t.Fatalf("Lengths of blocks differ")
-	}
-
-	for i := 0; i < len(correctVersionOneBlocks); i++ {
-		correct := correctVersionOneBlocks[i]
-		fetched := fetchedVersionOneBlocks[i]
-		isCorrect := (correct.BlockIndex == fetched.BlockIndex &&
-			correct.Location == fetched.Location &&
-			correct.ObjectName == fetched.ObjectName &&
-			correct.SHA256Checksum == fetched.SHA256Checksum &&
-			correct.Version == fetched.Version)
-		if !isCorrect {
-			t.Fatalf("Original version one blocks did not equal those we just fetched")
-		}
+	if !isEqual(correctVersionOneBlocks, fetchedVersionOneBlocks) {
+		t.Fatalf("Original version one blocks did not equal those we just fetched")
 	}
 
 	fetchedVersionTwoBlocks, err := e.loadBlockInfos(objectName, 2)
@@ -178,7 +155,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		}
 	}
 
-	fileChecksum, err := getChecksumForPath(newPath, JunkFileSizeInMB*1024*1024)
+	fileChecksum, err := getChecksumForPath(newPath, DefaultJunkFileSizeInMB*1024*1024)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,6 +168,123 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 	if fileChecksum != blocksChecksum {
 		t.Fatalf("File and block checksums were not equal")
 	}
+}
+
+// Version 2 has one more block than version one. The new block is appended
+// to the end of the file.
+func TestNewVersionWithLargerSize(t *testing.T) {
+	objectName, path, file, err := createAndSaveJunkFile(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correctVersionOneBlocks, err := e.loadBlockInfos(objectName, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nBlocks, err := e.getNumBlocksInFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newBytes := make([]byte, BlockSizeInKB*1024*(nBlocks+1))
+	oldBytes, err := read(path, nBlocks*BlockSizeInKB*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	copy(newBytes, oldBytes)
+	p := make([]byte, BlockSizeInKB*1024)
+	_, err = rand.Read(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < len(p); i++ {
+		offset := nBlocks * BlockSizeInKB * 1024
+		newBytes[offset+i] = p[i]
+	}
+
+	newPath, err := createAndSaveFile(objectName, newBytes, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fetchedVersionOneBlocks, err := e.loadBlockInfos(objectName, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !isEqual(correctVersionOneBlocks, fetchedVersionOneBlocks) {
+		t.Fatalf("Original version one blocks did not equal those we just fetched")
+	}
+
+	fetchedVersionTwoBlocks, err := e.loadBlockInfos(objectName, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(fetchedVersionTwoBlocks) != nBlocks+1 {
+		t.Fatalf("Did not load proper number of blocks for version two")
+	}
+
+	for i := 0; i < len(fetchedVersionTwoBlocks); i++ {
+		block := fetchedVersionTwoBlocks[i]
+		isChangedBlock := i == nBlocks
+		isCorrectVersion := (isChangedBlock && block.Version == 2) ||
+			(!isChangedBlock && block.Version == 1)
+		if !isCorrectVersion {
+			t.Fatalf("Block versions did not match what was changed")
+		}
+	}
+
+	fileChecksum, err := getChecksumForPath(newPath, DefaultJunkFileSizeInMB*1024*1024+BlockSizeInKB*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blocksChecksum, err := getChecksumForBlocks(fetchedVersionTwoBlocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileChecksum != blocksChecksum {
+		t.Fatalf("File and block checksums were not equal")
+	}
+}
+
+func createAndSaveFile(objectName string, content []byte, version int) (string, error) {
+	_, newPath, newFile, err := createTemporaryFile()
+	if err != nil {
+		return newPath, err
+	}
+
+	_, err = newFile.Write(content)
+	if err != nil {
+		return newPath, err
+	}
+
+	return newPath, e.saveObject(newFile, objectName, 2)
+}
+
+func isEqual(a, b []Block) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := 0; i < len(a); i++ {
+		isCorrect := (a[i].BlockIndex == b[i].BlockIndex &&
+			a[i].Location == b[i].Location &&
+			a[i].ObjectName == b[i].ObjectName &&
+			a[i].SHA256Checksum == b[i].SHA256Checksum &&
+			a[i].Version == b[i].Version)
+		if !isCorrect {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isNew(a []int, b int) bool {
@@ -214,7 +308,7 @@ func createTemporaryFile() (string, string, *os.File, error) {
 }
 
 func writeToJunkFile(file *os.File) error {
-	p := make([]byte, JunkFileSizeInMB*1024*1024)
+	p := make([]byte, DefaultJunkFileSizeInMB*1024*1024)
 	_, err := rand.Read(p)
 	if err != nil {
 		return err
@@ -226,7 +320,7 @@ func writeToJunkFile(file *os.File) error {
 
 func getChecksumForBlocks(blocks []Block) (string, error) {
 	blockSizeInBytes := BlockSizeInKB * 1024
-	p := make([]byte, JunkFileSizeInMB*1024*1024)
+	p := make([]byte, len(blocks)*blockSizeInBytes)
 	for i := 0; i < len(blocks); i++ {
 		q, err := read(blocks[i].Location, blockSizeInBytes)
 		if err != nil {
