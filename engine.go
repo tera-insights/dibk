@@ -298,6 +298,48 @@ func (e *Engine) getNextVersionNumber(name string) (int, error) {
 	return ov.Version + 1, nil
 }
 
+// RetrieveObject retrieves a particular object version.
+func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
+	var count int64
+	err := e.db.Model(&ObjectVersion{}).Where(&ObjectVersion{
+		Name:    name,
+		Version: version,
+	}).Count(&count).Error
+
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return fmt.Errorf("Cannot retrieve object that doesn't exist")
+	}
+
+	blocks, err := e.loadBlockInfos(name, version)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < len(blocks); i++ {
+		info, err := os.Stat(blocks[i].Location)
+		if err != nil {
+			return err
+		}
+
+		p, err := read(blocks[i].Location, int(info.Size()))
+		if err != nil {
+			return err
+		}
+
+		offset := int64(e.blockSizeInKB * 1024 * blocks[i].BlockIndex)
+		n, err := file.WriteAt(p, offset)
+		if n != len(p) {
+			return fmt.Errorf("Did not write all bytes from block")
+		}
+	}
+
+	return nil
+}
+
 // SaveObject saves a binary object.
 func (e *Engine) SaveObject(file *os.File, name string) error {
 	nextVersion, err := e.getNextVersionNumber(name)
