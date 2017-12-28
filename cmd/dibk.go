@@ -24,9 +24,8 @@ func main() {
 	}
 	app.Commands = []cli.Command{
 		cli.Command{
-			Name:      "store",
-			Usage:     "Store a version of a binary",
-			UsageText: "store - Store a version of a binary",
+			Name:  "store",
+			Usage: "Store a version of a binary",
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "name"},
 				cli.StringFlag{Name: "input"},
@@ -37,8 +36,29 @@ func main() {
 			Action: func(c *cli.Context) error {
 				err := store(c)
 				if err != nil {
-					fmt.Println("Could not parse flags")
+					fmt.Printf("Error = %v\n", err)
 					fmt.Println("Usage: dibk store --name OBJECT_NAME --input INPUT_FILE")
+				}
+				return err
+			},
+		},
+
+		cli.Command{
+			Name:  "retrieve",
+			Usage: "Retrieve a version of a binary",
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "name"},
+				cli.IntFlag{Name: "version"},
+				cli.StringFlag{Name: "output"},
+			},
+			SkipFlagParsing: false,
+			HideHelp:        false,
+			Hidden:          false,
+			Action: func(c *cli.Context) error {
+				err := retrieve(c)
+				if err != nil {
+					fmt.Printf("Error = %v\n", err)
+					fmt.Println("Usage: dibk retrieve --name OBJECT_NAME --version OBJECT_VERSION --output OUTPUT_FILE")
 				}
 				return err
 			},
@@ -72,12 +92,7 @@ func store(c *cli.Context) error {
 		return err
 	}
 
-	conf, err := readConfig()
-	if err != nil {
-		return err
-	}
-
-	e, err := dibk.MakeEngine(conf)
+	e, err := makeEngineFromConfig()
 	if err != nil {
 		return err
 	}
@@ -88,6 +103,34 @@ func store(c *cli.Context) error {
 	}
 
 	return e.SaveObject(file, name)
+}
+
+func retrieve(c *cli.Context) error {
+	name, version, outputPath, err := parseRetrieveFlags(c)
+	if err != nil {
+		return err
+	}
+
+	e, err := makeEngineFromConfig()
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Open(outputPath)
+	if err != nil {
+		return err
+	}
+
+	return e.RetrieveObject(file, name, version)
+}
+
+func makeEngineFromConfig() (dibk.Engine, error) {
+	conf, err := readConfig()
+	if err != nil {
+		return dibk.Engine{}, err
+	}
+
+	return dibk.MakeEngine(conf)
 }
 
 func parseStoreFlags(c *cli.Context) (string, string, error) {
@@ -102,4 +145,24 @@ func parseStoreFlags(c *cli.Context) (string, string, error) {
 	}
 
 	return name, input, nil
+}
+
+func parseRetrieveFlags(c *cli.Context) (name string, version int, output string, err error) {
+	name = c.String("name")
+	version = c.Int("version")
+	output = c.String("output")
+
+	if name == "" {
+		err = fmt.Errorf("Could not find 'name' flag")
+	}
+
+	if version == 0 {
+		err = fmt.Errorf("Could not find 'version'")
+	}
+
+	if output == "" {
+		err = fmt.Errorf("Could not find 'output' flag")
+	}
+
+	return
 }
