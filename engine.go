@@ -276,29 +276,43 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]wri
 	return paths, nil
 }
 
-func (e *Engine) saveObject(file *os.File, name string, version int) error {
+func (e *Engine) getNextVersionNumber(name string) (int, error) {
 	var count int
 	err := e.db.Model(&ObjectVersion{}).Where(&ObjectVersion{
-		Name:    name,
-		Version: version,
+		Name: name,
 	}).Count(&count).Error
+
+	if err != nil {
+		return -1, err
+	}
+
+	if count == 0 {
+		return 1, nil
+	}
+
+	ov, err := e.getLatestVersion(name)
+	if err != nil {
+		return -1, err
+	}
+
+	return ov.Version + 1, nil
+}
+
+// SaveObject saves a binary object.
+func (e *Engine) SaveObject(file *os.File, name string) error {
+	nextVersion, err := e.getNextVersionNumber(name)
 	if err != nil {
 		return err
 	}
 
-	isNew := count == 0
-	if !isNew {
-		return fmt.Errorf("Not a new combination of version and object ID")
-	}
-
-	results, err := e.writeFileInBlocks(file, name, version)
+	results, err := e.writeFileInBlocks(file, name, nextVersion)
 	if err != nil {
 		return err
 	}
 
 	err = e.db.Create(&ObjectVersion{
 		Name:           name,
-		Version:        version,
+		Version:        nextVersion,
 		NumberOfBlocks: len(results),
 	}).Error
 	if err != nil {
@@ -320,7 +334,7 @@ func (e *Engine) saveObject(file *os.File, name string, version int) error {
 			Location:       results[i].path,
 			BlockIndex:     i,
 			ObjectName:     name,
-			Version:        version,
+			Version:        nextVersion,
 		}
 		err = e.db.Create(&b).Error
 		if err != nil {

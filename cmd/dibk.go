@@ -3,6 +3,7 @@ package main
 import (
 	"dibk"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -34,7 +35,12 @@ func main() {
 			HideHelp:        false,
 			Hidden:          false,
 			Action: func(c *cli.Context) error {
-				return store(c)
+				err := store(c)
+				if err != nil {
+					fmt.Println("Could not parse flags")
+					fmt.Println("Usage: dibk store --name OBJECT_NAME --input INPUT_FILE")
+				}
+				return err
 			},
 		},
 	}
@@ -61,14 +67,39 @@ func readConfig() (dibk.Configuration, error) {
 }
 
 func store(c *cli.Context) error {
+	name, inputPath, err := parseStoreFlags(c)
+	if err != nil {
+		return err
+	}
+
 	conf, err := readConfig()
 	if err != nil {
 		return err
 	}
 
-	_, err = dibk.MakeEngine(conf)
+	e, err := dibk.MakeEngine(conf)
 	if err != nil {
 		return err
 	}
-	return nil
+
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return err
+	}
+
+	return e.SaveObject(file, name)
+}
+
+func parseStoreFlags(c *cli.Context) (string, string, error) {
+	name := c.String("name")
+	input := c.String("input")
+	if name == "" {
+		return name, input, fmt.Errorf("Could not find 'name' flag")
+	}
+
+	if input == "" {
+		return name, input, fmt.Errorf("Could not find 'input' flag")
+	}
+
+	return name, input, nil
 }

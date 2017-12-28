@@ -72,7 +72,7 @@ func createAndSaveJunkFile(version int) (objectName string, path string, file *o
 		return
 	}
 
-	err = e.saveObject(file, objectName, 1)
+	err = e.SaveObject(file, objectName)
 	return
 }
 
@@ -350,7 +350,7 @@ func createAndSaveFile(objectName string, content []byte, version int) (string, 
 		return newPath, err
 	}
 
-	return newPath, e.saveObject(newFile, objectName, 2)
+	return newPath, e.SaveObject(newFile, objectName)
 }
 
 func isEqual(a, b []Block) bool {
