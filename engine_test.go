@@ -20,6 +20,7 @@ const JunkFileSizeInMB = 2
 const BlockSizeInKB = 1024
 
 var testDB *gorm.DB
+var e Engine
 
 func TestMain(m *testing.M) {
 	err := setup()
@@ -33,28 +34,12 @@ func TestMain(m *testing.M) {
 }
 
 func TestUploadingAndRetrievingSameFile(t *testing.T) {
-	objectName, path, file, err := createTemporaryFile()
+	objectName, path, _, err := createAndSaveJunkFile(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = writeToJunkFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	e := Engine{
-		db:              testDB,
-		blockSizeInKB:   BlockSizeInKB,
-		storageLocation: os.TempDir(),
-	}
-	version := 1
-	err = e.saveObject(file, objectName, version)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	loaded, err := e.loadBlockInfos(objectName, version)
+	loaded, err := e.loadBlockInfos(objectName, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,24 +61,23 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	os.Remove(path)
 }
 
-func TestChangingBlocksWithSameSizeFile(t *testing.T) {
-	e := Engine{
-		db:              testDB,
-		blockSizeInKB:   BlockSizeInKB,
-		storageLocation: os.TempDir(),
-	}
-
-	objectName, path, file, err := createTemporaryFile()
+func createAndSaveJunkFile(version int) (objectName string, path string, file *os.File, err error) {
+	objectName, path, file, err = createTemporaryFile()
 	if err != nil {
-		t.Fatal(err)
+		return
 	}
 
 	err = writeToJunkFile(file)
 	if err != nil {
-		t.Fatal(err)
+		return
 	}
 
 	err = e.saveObject(file, objectName, 1)
+	return
+}
+
+func TestChangingBlocksWithSameSizeFile(t *testing.T) {
+	objectName, path, file, err := createAndSaveJunkFile(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +106,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 
 	copy(newBytes, oldBytes)
 
-	nToChange := 2
+	nToChange := 1
 	changedIndices := make([]int, nToChange)
 	for i := 0; i < len(changedIndices); i++ {
 		changedIndices[i] = -1
@@ -277,6 +261,13 @@ func setup() error {
 	}
 
 	err = testDB.AutoMigrate(&Block{}).Error
+
+	e = Engine{
+		db:              testDB,
+		blockSizeInKB:   BlockSizeInKB,
+		storageLocation: os.TempDir(),
+	}
+
 	return err
 }
 
