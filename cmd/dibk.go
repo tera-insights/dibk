@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"time"
 
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -12,6 +13,11 @@ import (
 )
 
 func main() {
+	app := buildApp()
+	app.Run(os.Args)
+}
+
+func buildApp() *cli.App {
 	app := cli.NewApp()
 	app.Description = "Disk image backup"
 	app.Name = "dibk"
@@ -23,6 +29,7 @@ func main() {
 			Email: "smith.jessk@gmail.com",
 		},
 	}
+
 	app.Commands = []cli.Command{
 		cli.Command{
 			Name:  "store",
@@ -66,13 +73,34 @@ func main() {
 		},
 	}
 
+	app.Flags = []cli.Flag{
+		cli.StringFlag{Name: "profile"},
+	}
+
+	app.Before = func(c *cli.Context) error {
+		if c.String("profile") != "" {
+			f, err := os.Create(c.String("profile"))
+			if err != nil {
+				fmt.Printf("found an error here %v\n", err)
+				return err
+			}
+			pprof.StartCPUProfile(f)
+		}
+		return nil
+	}
+
+	app.After = func(c *cli.Context) error {
+		pprof.StopCPUProfile()
+		return nil
+	}
+
 	app.Action = func(c *cli.Context) error {
 		cli.ErrWriter.Write([]byte("Invalid subcommand. Options are:\n"))
 		cli.DefaultAppComplete(c)
 		return nil
 	}
 
-	app.Run(os.Args)
+	return app
 }
 
 func readConfig() (dibk.Configuration, error) {
