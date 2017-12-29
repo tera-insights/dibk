@@ -158,8 +158,15 @@ func (e *Engine) loadBlockInfos(objectID string, version int) ([]Block, error) {
 
 func (e *Engine) getBlockInFile(source *os.File, index int) ([]byte, error) {
 	offset := int64(e.blockSizeInKB * 1024 * index)
-	p := make([]byte, e.blockSizeInKB*1024)
-	_, err := source.ReadAt(p, offset)
+	info, err := source.Stat()
+	if err != nil {
+		return []byte{}, err
+	}
+	remainingBytes := info.Size() - int64(e.blockSizeInKB*1024*index)
+	bufferSize := int(math.Min(float64(remainingBytes),
+		float64(e.blockSizeInKB*1024)))
+	p := make([]byte, bufferSize)
+	_, err = source.ReadAt(p, offset)
 	return p, err
 }
 
@@ -180,10 +187,8 @@ func (e *Engine) writeBlock(source *os.File, id string, version int, index int) 
 		return path, err
 	}
 
-	n, err := f.Write(p)
-	if n != e.blockSizeInKB*1024 {
-		return path, fmt.Errorf("Did not write enough bytes")
-	} else if err != nil {
+	_, err = f.Write(p)
+	if err != nil {
 		return path, err
 	}
 
@@ -371,7 +376,12 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 			continue
 		}
 
-		checksum, err := getChecksumForPath(results[i].path, e.blockSizeInKB*1024)
+		info, err := os.Stat(results[i].path)
+		if err != nil {
+			return err
+		}
+
+		checksum, err := getChecksumForPath(results[i].path, int(info.Size()))
 		if err != nil {
 			return err
 		}

@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestUploadingAndRetrievingSameFile(t *testing.T) {
-	objectName, path, _, err := createAndSaveJunkFile(1)
+	objectName, path, _, err := createAndSaveNewJunkFile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	os.Remove(path)
 }
 
-func createAndSaveJunkFile(version int) (objectName string, path string, file *os.File, err error) {
+func createAndSaveNewJunkFile() (objectName string, path string, file *os.File, err error) {
 	objectName, path, file, err = createTemporaryFile()
 	if err != nil {
 		return
@@ -77,7 +77,7 @@ func createAndSaveJunkFile(version int) (objectName string, path string, file *o
 }
 
 func TestChangingBlocksWithSameSizeFile(t *testing.T) {
-	objectName, path, file, err := createAndSaveJunkFile(1)
+	objectName, path, file, err := createAndSaveNewJunkFile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		}
 	}
 
-	newPath, err := createAndSaveFile(objectName, newBytes, 2)
+	newPath, err := createAndSaveFile(objectName, newBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 // Version 2 has one more block than version one. The new block is appended
 // to the end of the file.
 func TestNewVersionWithLargerSize(t *testing.T) {
-	objectName, path, file, err := createAndSaveJunkFile(1)
+	objectName, path, file, err := createAndSaveNewJunkFile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestNewVersionWithLargerSize(t *testing.T) {
 		newBytes[offset+i] = p[i]
 	}
 
-	newPath, err := createAndSaveFile(objectName, newBytes, 2)
+	newPath, err := createAndSaveFile(objectName, newBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestNewVersionWithLargerSize(t *testing.T) {
 }
 
 func TestNewVersionWithSmallerSize(t *testing.T) {
-	objectName, path, file, err := createAndSaveJunkFile(1)
+	objectName, path, file, err := createAndSaveNewJunkFile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 
 	copy(newBytes, oldBytes)
 
-	newPath, err := createAndSaveFile(objectName, newBytes, 2)
+	newPath, err := createAndSaveFile(objectName, newBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,6 +330,40 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 	}
 }
 
+func TestFileSizeNotMultipleOfBlockSize(t *testing.T) {
+	fileSize := DefaultJunkFileSizeInMB*1024*1024 + 1
+	content := make([]byte, fileSize)
+	_, err := rand.Read(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	objectName := "a"
+	path, err := createAndSaveFile(objectName, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blocks, err := e.loadBlockInfos(objectName, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fileChecksum, err := getChecksumForPath(path, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockChecksum, err := getChecksumForBlocks(blocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if blockChecksum != fileChecksum {
+		t.Fatalf("File checksum did not match checksum of received blocks")
+	}
+}
+
 func fetchAndCheck(objectName string, version int, b []Block) (bool, error) {
 	fetchedVersionOneBlocks, err := e.loadBlockInfos(objectName, 1)
 	if err != nil {
@@ -339,18 +373,18 @@ func fetchAndCheck(objectName string, version int, b []Block) (bool, error) {
 	return isEqual(fetchedVersionOneBlocks, b), nil
 }
 
-func createAndSaveFile(objectName string, content []byte, version int) (string, error) {
-	_, newPath, newFile, err := createTemporaryFile()
+func createAndSaveFile(objectName string, content []byte) (path string, err error) {
+	_, path, newFile, err := createTemporaryFile()
 	if err != nil {
-		return newPath, err
+		return path, err
 	}
 
 	_, err = newFile.Write(content)
 	if err != nil {
-		return newPath, err
+		return path, err
 	}
 
-	return newPath, e.SaveObject(newFile, objectName)
+	return path, e.SaveObject(newFile, objectName)
 }
 
 func isEqual(a, b []Block) bool {
@@ -404,19 +438,40 @@ func writeToJunkFile(file *os.File) error {
 }
 
 func getChecksumForBlocks(blocks []Block) (string, error) {
-	blockSizeInBytes := BlockSizeInKB * 1024
-	p := make([]byte, len(blocks)*blockSizeInBytes)
+	fileSize, err := getSizeOfBlocks(blocks)
+	if err != nil {
+		return "", err
+	}
+	p := make([]byte, fileSize)
 	for i := 0; i < len(blocks); i++ {
-		q, err := read(blocks[i].Location, blockSizeInBytes)
+		info, err := os.Stat(blocks[i].Location)
 		if err != nil {
 			return "", err
 		}
-		baseIndex := blocks[i].BlockIndex * blockSizeInBytes
-		for j := 0; j < blockSizeInBytes; j++ {
+
+		q, err := read(blocks[i].Location, int(info.Size()))
+		if err != nil {
+			return "", err
+		}
+		baseIndex := blocks[i].BlockIndex * BlockSizeInKB * 1024
+		for j := 0; j < int(info.Size()); j++ {
 			p[baseIndex+j] = q[j]
 		}
 	}
 	return fmt.Sprintf("%x", sha1.Sum(p)), nil
+}
+
+func getSizeOfBlocks(blocks []Block) (int64, error) {
+	size := int64(0)
+	for i := 0; i < len(blocks); i++ {
+		info, err := os.Stat(blocks[i].Location)
+		if err != nil {
+			return size, err
+		}
+
+		size += info.Size()
+	}
+	return size, nil
 }
 
 func setup() error {
