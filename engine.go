@@ -1,7 +1,6 @@
 package dibk
 
 import (
-	"crypto/sha1"
 	"fmt"
 	"math"
 	"os"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // for gorm
+	"github.com/spacemonkeygo/openssl"
 )
 
 // Configuration defines the paths and variables needed to run dibk.
@@ -242,10 +242,11 @@ func (e *Engine) shouldWriteBlock(source *os.File, name string, version, blockIn
 		return false, err
 	}
 
-	passedBlockChecksum := fmt.Sprintf("%x", sha1.Sum(passedBlock))
+	hash, err := openssl.SHA1(passedBlock)
 	if err != nil {
 		return false, err
 	}
+	passedBlockChecksum := fmt.Sprintf("%x", hash)
 
 	isBlockChanged := latestBlock.SHA1Checksum != passedBlockChecksum
 	return isBlockChanged, nil
@@ -404,7 +405,8 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 
 func getChecksumForPath(path string, fileSizeInBytes int) (string, error) {
 	p, err := read(path, fileSizeInBytes)
-	return fmt.Sprintf("%x", sha1.Sum(p)), err
+	hash, err := openssl.SHA1(p)
+	return fmt.Sprintf("%x", hash), err
 }
 
 func read(path string, sizeInBytes int) ([]byte, error) {

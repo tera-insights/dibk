@@ -1,7 +1,6 @@
 package dibk
 
 import (
-	"crypto/sha1"
 	"fmt"
 	"math/rand"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // Needed for Gorm
+	"github.com/spacemonkeygo/openssl"
 )
 
 const DBType = "sqlite3"
@@ -458,7 +458,8 @@ func getChecksumForBlocks(blocks []Block) (string, error) {
 			p[baseIndex+j] = q[j]
 		}
 	}
-	return fmt.Sprintf("%x", sha1.Sum(p)), nil
+	hash, err := openssl.SHA1(p)
+	return fmt.Sprintf("%x", hash), err
 }
 
 func getSizeOfBlocks(blocks []Block) (int64, error) {
