@@ -1,7 +1,7 @@
 package dibk
 
 import (
-	"crypto/sha256"
+	"crypto/sha1"
 	"fmt"
 	"math"
 	"os"
@@ -237,12 +237,12 @@ func (e *Engine) shouldWriteBlock(source *os.File, name string, version, blockIn
 		return false, err
 	}
 
-	passedBlockChecksum := fmt.Sprintf("%x", sha256.Sum256(passedBlock))
+	passedBlockChecksum := fmt.Sprintf("%x", sha1.Sum(passedBlock))
 	if err != nil {
 		return false, err
 	}
 
-	isBlockChanged := latestBlock.SHA256Checksum != passedBlockChecksum
+	isBlockChanged := latestBlock.SHA1Checksum != passedBlockChecksum
 	return isBlockChanged, nil
 }
 
@@ -377,11 +377,11 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 		}
 
 		b := Block{
-			SHA256Checksum: checksum,
-			Location:       results[i].path,
-			BlockIndex:     i,
-			ObjectName:     name,
-			Version:        nextVersion,
+			SHA1Checksum: checksum,
+			Location:     results[i].path,
+			BlockIndex:   i,
+			ObjectName:   name,
+			Version:      nextVersion,
 		}
 		err = e.db.Create(&b).Error
 		if err != nil {
@@ -394,7 +394,7 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 
 func getChecksumForPath(path string, fileSizeInBytes int) (string, error) {
 	p, err := read(path, fileSizeInBytes)
-	return fmt.Sprintf("%x", sha256.Sum256(p)), err
+	return fmt.Sprintf("%x", sha1.Sum(p)), err
 }
 
 func read(path string, sizeInBytes int) ([]byte, error) {

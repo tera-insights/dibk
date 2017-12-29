@@ -1,7 +1,7 @@
 package dibk
 
 import (
-	"crypto/sha256"
+	"crypto/sha1"
 	"fmt"
 	"math/rand"
 	"os"
@@ -362,7 +362,7 @@ func isEqual(a, b []Block) bool {
 		isCorrect := (a[i].BlockIndex == b[i].BlockIndex &&
 			a[i].Location == b[i].Location &&
 			a[i].ObjectName == b[i].ObjectName &&
-			a[i].SHA256Checksum == b[i].SHA256Checksum &&
+			a[i].SHA1Checksum == b[i].SHA1Checksum &&
 			a[i].Version == b[i].Version)
 		if !isCorrect {
 			return false
@@ -416,7 +416,7 @@ func getChecksumForBlocks(blocks []Block) (string, error) {
 			p[baseIndex+j] = q[j]
 		}
 	}
-	return fmt.Sprintf("%x", sha256.Sum256(p)), nil
+	return fmt.Sprintf("%x", sha1.Sum(p)), nil
 }
 
 func setup() error {
