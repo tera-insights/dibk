@@ -2,16 +2,13 @@
 
 Disk Image Backup
 
+## Dependencies
+
+We use [`glide`](https://github.com/Masterminds/glide) for dependency management. `sqlite3` must be installed to run the [tests](#Testing).
+
 ## Building
 
-We use [`glide`](https://github.com/Masterminds/glide) for dependency management.
-
-To build a release executable from scratch:
-
-```
-glide install
-go build cmd/dibk.go
-```
+`make dibk`
 
 ## Usage
 
@@ -26,13 +23,4 @@ Make sure the `DIBK_CONFIG` environment variable is set. It should contain a (po
 
 ## Testing
 
-Must have `sqlite3` installed and available as an executable under that name.
-
-To run the Go tests, use ` go test `.
-
-
-CLI tests are present in `test/`. Before running them, we recommend *deleting* `vendor` as this takes a while to build, making the tests slow. You can always use `glide.yaml` as a reference for the dependencies.
-
-```
-PATH_TO_EXECUTABLE=cmd/dibk.go DIBK_CONFIG=test/dibk_config.json ./test/cli_test.sh
-```
+`make test`
