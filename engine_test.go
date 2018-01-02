@@ -453,6 +453,7 @@ func getChecksumForBlocks(blocks []Block) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		baseIndex := blocks[i].BlockIndex * BlockSizeInKB * 1024
 		for j := 0; j < int(info.Size()); j++ {
 			p[baseIndex+j] = q[j]

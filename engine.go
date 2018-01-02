@@ -213,7 +213,7 @@ func (e *Engine) isObjectNew(name string) (bool, error) {
 	return count == 0, err
 }
 
-func (e *Engine) shouldWriteBlock(source *os.File, name string, version, blockIndex int) (bool, error) {
+func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, p []byte) (bool, error) {
 	isObjectNew, err := e.isObjectNew(name)
 	if err != nil {
 		return false, err
@@ -238,18 +238,12 @@ func (e *Engine) shouldWriteBlock(source *os.File, name string, version, blockIn
 		return false, err
 	}
 
-	passedBlock, err := e.getBlockInFile(source, blockIndex)
+	hash, err := openssl.SHA1(p)
 	if err != nil {
 		return false, err
 	}
 
-	hash, err := openssl.SHA1(passedBlock)
-	if err != nil {
-		return false, err
-	}
-	passedBlockChecksum := fmt.Sprintf("%x", hash)
-
-	isBlockChanged := latestBlock.SHA1Checksum != passedBlockChecksum
+	isBlockChanged := latestBlock.SHA1Checksum != fmt.Sprintf("%x", hash)
 	return isBlockChanged, nil
 }
 
@@ -294,7 +288,7 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]wri
 			go func() {
 				agenda <- task
 			}()
-			shouldWrite, err := e.shouldWriteBlock(file, id, version, task.blockNumber)
+			shouldWrite, err := e.shouldWriteBlock(id, version, task.blockNumber, localBuffer)
 			if err != nil {
 				panic(err)
 			}
@@ -471,7 +465,7 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 		b := Block{
 			SHA1Checksum: checksum,
 			Location:     results[i].path,
-			BlockIndex:   i,
+			BlockIndex:   results[i].blockNumber,
 			ObjectName:   name,
 			Version:      nextVersion,
 		}
