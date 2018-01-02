@@ -1,3 +1,5 @@
+.PHONY: test profile clean
+
 dibk: vendor/ *.go cmd/*.go
 	go build cmd/dibk.go
 
