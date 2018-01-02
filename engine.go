@@ -213,7 +213,7 @@ func (e *Engine) isObjectNew(name string) (bool, error) {
 	return count == 0, err
 }
 
-func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, p []byte) (bool, error) {
+func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, newBlockChecksum string) (bool, error) {
 	isObjectNew, err := e.isObjectNew(name)
 	if err != nil {
 		return false, err
@@ -238,12 +238,7 @@ func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, p []byte
 		return false, err
 	}
 
-	hash, err := openssl.SHA1(p)
-	if err != nil {
-		return false, err
-	}
-
-	isBlockChanged := latestBlock.SHA1Checksum != fmt.Sprintf("%x", hash)
+	isBlockChanged := latestBlock.SHA1Checksum != newBlockChecksum
 	return isBlockChanged, nil
 }
 
@@ -274,71 +269,87 @@ type writeTask struct {
 }
 
 func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]writeResult, error) {
-	agenda := make(chan writeTask)
+	writer := make(chan writeTask)
 	finished := make(chan writeResult)
+	filler := make(chan []byte)
 	nBlocks, err := e.getNumBlocksInFile(file)
 	if err != nil {
 		return []writeResult{}, err
 	}
+
 	go func() {
 		for true {
-			task := <-agenda
-			localBuffer := make([]byte, len(task.buffer))
-			copy(localBuffer, task.buffer)
-			go func() {
-				agenda <- task
-			}()
-			shouldWrite, err := e.shouldWriteBlock(id, version, task.blockNumber, localBuffer)
+			task := <-writer
+			hash, err := openssl.SHA1(task.buffer)
+			if err != nil {
+				panic(err)
+			}
+
+			blockChecksum := fmt.Sprintf("%x", hash)
+			shouldWrite, err := e.shouldWriteBlock(id, version, task.blockNumber, blockChecksum)
 			if err != nil {
 				panic(err)
 			}
 
 			if shouldWrite {
-				path, err := e.writeBytesAsBlock(id, version, task.blockNumber, localBuffer)
+				path, err := e.writeBytesAsBlock(id, version, task.blockNumber, task.buffer)
 				if err != nil {
 					panic(err)
 				}
+
 				go func() {
-					finished <- writeResult{path, true, task.blockNumber}
+					finished <- writeResult{path, true, task.blockNumber, blockChecksum}
 				}()
 			} else {
 				go func() {
-					finished <- writeResult{"", false, task.blockNumber}
+					finished <- writeResult{"", false, task.blockNumber, blockChecksum}
 				}()
 			}
 
 			if task.blockNumber == nBlocks-1 {
 				break
+			} else {
+				go func() {
+					filler <- task.buffer
+				}()
 			}
 		}
 	}()
-
-	bufferSize := e.blockSizeInKB * 1024
-	buffer := make([]byte, bufferSize)
-	blockNumber := 0
 
 	_, err = file.Seek(0, 0)
 	if err != nil {
 		return []writeResult{}, err
 	}
 
-	for blockNumber < nBlocks {
-		if blockNumber > 0 {
-			<-agenda // wait until previous task is complete
-		}
+	go func() {
+		blockNumber := 0
+		for blockNumber < nBlocks {
+			buffer := <-filler
 
-		if blockNumber < nBlocks-1 {
-			_, err = file.Read(buffer)
-		} else {
-			buffer, err = e.getBlockInFile(file, blockNumber) // last block may not be full
-		}
+			if blockNumber < nBlocks-1 {
+				_, err = file.Read(buffer)
+			} else {
+				buffer, err = e.getBlockInFile(file, blockNumber) // last block may not be full
+			}
 
-		if err != nil {
-			return []writeResult{}, err
+			if err != nil {
+				panic(err)
+			}
+
+			go func(bn int) {
+				writer <- writeTask{bn, buffer}
+			}(blockNumber)
+			blockNumber++
 		}
-		agenda <- writeTask{blockNumber, buffer}
-		blockNumber++
-	}
+	}()
+
+	bufferSize := e.blockSizeInKB * 1024
+	bufferA := make([]byte, bufferSize)
+	bufferB := make([]byte, bufferSize)
+	filler <- bufferA
+	go func() {
+		filler <- bufferB
+	}()
 
 	wg := sync.WaitGroup{}
 	wg.Add(nBlocks)
@@ -360,6 +371,7 @@ type writeResult struct {
 	path        string
 	isNew       bool
 	blockNumber int
+	checksum    string
 }
 
 func (e *Engine) getNextVersionNumber(name string) (int, error) {
@@ -452,18 +464,8 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 			continue
 		}
 
-		info, err := os.Stat(results[i].path)
-		if err != nil {
-			return err
-		}
-
-		checksum, err := getChecksumForPath(results[i].path, int(info.Size()))
-		if err != nil {
-			return err
-		}
-
 		b := Block{
-			SHA1Checksum: checksum,
+			SHA1Checksum: results[i].checksum,
 			Location:     results[i].path,
 			BlockIndex:   results[i].blockNumber,
 			ObjectName:   name,
@@ -476,12 +478,6 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 	}
 
 	return nil
-}
-
-func getChecksumForPath(path string, fileSizeInBytes int) (string, error) {
-	p, err := read(path, fileSizeInBytes)
-	hash, err := openssl.SHA1(p)
-	return fmt.Sprintf("%x", hash), err
 }
 
 func read(path string, sizeInBytes int) ([]byte, error) {

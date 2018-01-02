@@ -512,3 +512,9 @@ func teardown() error {
 	}
 	return nil
 }
+
+func getChecksumForPath(path string, fileSizeInBytes int) (string, error) {
+	p, err := read(path, fileSizeInBytes)
+	hash, err := openssl.SHA1(p)
+	return fmt.Sprintf("%x", hash), err
+}
