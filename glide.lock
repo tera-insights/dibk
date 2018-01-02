@@ -1,5 +1,5 @@
-hash: 20534cc4dac3b0aadd05833952614c245c675072c3da5dc4ad028831b8de64a8
-updated: 2017-12-28T15:39:12.808457949-05:00
+hash: d4a8b916b26b04723ba58e2f0a38ad43e0b3a73fdcebb587e62f5b8bac443a9c
+updated: 2018-01-02T09:22:04.683578125-05:00
 imports:
 - name: github.com/jinzhu/gorm
   version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
@@ -9,6 +9,16 @@ imports:
   version: 74387dc39a75e970e7a3ae6a3386b5bd2e5c5cff
 - name: github.com/mattn/go-sqlite3
   version: e5a3c16c5c1d80b24f633e68aecd6b0702786d3d
+- name: github.com/spacemonkeygo/openssl
+  version: 4ea35d79e3ae2758eac37f0348cdc58aa167e78a
+  subpackages:
+  - utils
+- name: github.com/spacemonkeygo/spacelog
+  version: 081216856ee01315ad130cb9ccd5d2a40624c619
 - name: github.com/urfave/cli
   version: cfb38830724cc34fedffe9a2a29fb54fa9169cd1
+- name: golang.org/x/sys
+  version: c200b10b5d5e122be351b67af224adc6128af5bf
+  subpackages:
+  - unix
 testImports: []
