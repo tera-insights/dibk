@@ -5,6 +5,9 @@ test: vendor/
 	go test
 	PATH_TO_EXECUTABLE=cmd/dibk.go DIBK_CONFIG=test/dibk_config.json ./test/cli_test.sh
 
+profile: vendor/
+	PATH_TO_EXECUTABLE=cmd/dibk.go DIBK_CONFIG=test/dibk_config.json ./test/profile.sh
+
 vendor/: glide.lock glide.yaml
 	glide install
 	go install dibk/vendor/github.com/mattn/go-sqlite3
