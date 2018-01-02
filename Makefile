@@ -7,7 +7,8 @@ test: vendor/
 
 vendor/: glide.lock glide.yaml
 	glide install
-	go install -v dibk/vendor/github.com/mattn/go-sqlite3
+	go install dibk/vendor/github.com/mattn/go-sqlite3
+	go install dibk/vendor/github.com/spacemonkeygo/openssl
 
 clean:
 	rm -r vendor
