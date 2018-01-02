@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"sync"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // for gorm
@@ -59,7 +60,7 @@ func (e *Engine) getObjectVersion(name string, version int) (ObjectVersion, erro
 }
 
 func (e *Engine) getAllBlocks(name string) ([]Block, error) {
-	allBlocks := make([]Block, 0)
+	var allBlocks []Block
 	err := e.db.Find(&allBlocks, &Block{
 		ObjectName: name,
 	}).Error
@@ -252,39 +253,119 @@ func (e *Engine) shouldWriteBlock(source *os.File, name string, version, blockIn
 	return isBlockChanged, nil
 }
 
-type writeResult struct {
-	path  string
-	isNew bool
+func (e *Engine) writeBytesAsBlock(id string, version int, blockNumber int, p []byte) (string, error) {
+	blockName := id + "-" + strconv.Itoa(version) + "-" + strconv.Itoa(blockNumber) + ".dibk"
+	path := path.Join(e.storageLocation, blockName)
+	if !isFileNew(path) {
+		return path, fmt.Errorf("Block with name %s already exists", path)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return path, err
+	}
+
+	_, err = f.Write(p)
+	if err != nil {
+		return path, err
+	}
+
+	err = f.Close()
+	return path, err
+}
+
+type writeTask struct {
+	blockNumber int
+	buffer      []byte
 }
 
 func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]writeResult, error) {
+	agenda := make(chan writeTask)
+	finished := make(chan writeResult)
 	nBlocks, err := e.getNumBlocksInFile(file)
 	if err != nil {
 		return []writeResult{}, err
 	}
-
-	paths := make([]writeResult, nBlocks)
-	for i := 0; i < nBlocks; i++ {
-		shouldWrite, err := e.shouldWriteBlock(file, id, version, i)
-		if err != nil {
-			return paths, err
-		}
-
-		if shouldWrite {
-			path, err := e.writeBlock(file, id, version, i)
-			paths[i] = writeResult{path, true}
+	go func() {
+		for true {
+			task := <-agenda
+			localBuffer := make([]byte, len(task.buffer))
+			copy(localBuffer, task.buffer)
+			go func() {
+				agenda <- task
+			}()
+			shouldWrite, err := e.shouldWriteBlock(file, id, version, task.blockNumber)
 			if err != nil {
-				return paths, err
+				panic(err)
 			}
-		} else {
-			info, err := e.loadLatestBlock(id, i)
-			if err != nil {
-				return paths, err
+
+			if shouldWrite {
+				path, err := e.writeBytesAsBlock(id, version, task.blockNumber, localBuffer)
+				if err != nil {
+					panic(err)
+				}
+				go func() {
+					finished <- writeResult{path, true, task.blockNumber}
+				}()
+			} else {
+				go func() {
+					finished <- writeResult{"", false, task.blockNumber}
+				}()
 			}
-			paths[i] = writeResult{info.Location, false}
+
+			if task.blockNumber == nBlocks-1 {
+				break
+			}
 		}
+	}()
+
+	bufferSize := e.blockSizeInKB * 1024
+	buffer := make([]byte, bufferSize)
+	blockNumber := 0
+
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		return []writeResult{}, err
 	}
-	return paths, nil
+
+	for blockNumber < nBlocks {
+		if blockNumber > 0 {
+			<-agenda // wait until previous task is complete
+		}
+
+		if blockNumber < nBlocks-1 {
+			_, err = file.Read(buffer)
+		} else {
+			buffer, err = e.getBlockInFile(file, blockNumber) // last block may not be full
+		}
+
+		if err != nil {
+			return []writeResult{}, err
+		}
+		agenda <- writeTask{blockNumber, buffer}
+		blockNumber++
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(nBlocks)
+
+	var wr []writeResult
+	go func() {
+		for len(wr) < nBlocks {
+			x := <-finished
+			wr = append(wr, x)
+			wg.Done()
+		}
+	}()
+
+	wg.Wait()
+	return wr, nil
+}
+
+type writeResult struct {
+	path        string
+	isNew       bool
+	blockNumber int
 }
 
 func (e *Engine) getNextVersionNumber(name string) (int, error) {
