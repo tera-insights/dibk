@@ -347,9 +347,9 @@ func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]wri
 	bufferA := make([]byte, bufferSize)
 	bufferB := make([]byte, bufferSize)
 	filler <- bufferA
-	go func() {
+	if nBlocks > 1 {
 		filler <- bufferB
-	}()
+	}
 
 	wg := sync.WaitGroup{}
 	wg.Add(nBlocks)
@@ -459,22 +459,27 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 		return err
 	}
 
+	tx := e.db.Begin()
 	for i := 0; i < len(results); i++ {
-		if !results[i].isNew {
-			continue
+		if results[i].isNew {
+			b := Block{
+				SHA1Checksum: results[i].checksum,
+				Location:     results[i].path,
+				BlockIndex:   results[i].blockNumber,
+				ObjectName:   name,
+				Version:      nextVersion,
+			}
+			err = tx.Create(&b).Error
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
 		}
+	}
 
-		b := Block{
-			SHA1Checksum: results[i].checksum,
-			Location:     results[i].path,
-			BlockIndex:   results[i].blockNumber,
-			ObjectName:   name,
-			Version:      nextVersion,
-		}
-		err = e.db.Create(&b).Error
-		if err != nil {
-			return err
-		}
+	err = tx.Commit().Error
+	if err != nil {
+		return err
 	}
 
 	return nil
