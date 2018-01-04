@@ -108,9 +108,7 @@ func (wp *fileWriterWorkerPool) startAsynchronousReader() error {
 				panic(err)
 			}
 
-			go func(bn int) {
-				wp.writer <- blockWriteTask{bn, buffer}
-			}(blockNumber)
+			wp.writer <- blockWriteTask{blockNumber, buffer}
 			blockNumber++
 		}
 	}()
