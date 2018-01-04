@@ -6,11 +6,9 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"sync"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // for gorm
-	"github.com/spacemonkeygo/openssl"
 )
 
 // Configuration defines the paths and variables needed to run dibk.
@@ -171,32 +169,6 @@ func (e *Engine) getBlockInFile(source *os.File, index int) ([]byte, error) {
 	return p, err
 }
 
-func (e *Engine) writeBlock(source *os.File, id string, version int, index int) (string, error) {
-	blockName := id + "-" + strconv.Itoa(version) + "-" + strconv.Itoa(index) + ".dibk"
-	path := path.Join(e.storageLocation, blockName)
-	if !isFileNew(path) {
-		return path, fmt.Errorf("Block with name %s already exists", path)
-	}
-
-	p, err := e.getBlockInFile(source, index)
-	if err != nil {
-		return path, err
-	}
-
-	f, err := os.Create(path)
-	if err != nil {
-		return path, err
-	}
-
-	_, err = f.Write(p)
-	if err != nil {
-		return path, err
-	}
-
-	err = f.Close()
-	return path, err
-}
-
 func (e *Engine) getNumBlocksInFile(file *os.File) (int, error) {
 	stat, err := file.Stat()
 	if err != nil {
@@ -213,8 +185,8 @@ func (e *Engine) isObjectNew(name string) (bool, error) {
 	return count == 0, err
 }
 
-func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, newBlockChecksum string) (bool, error) {
-	isObjectNew, err := e.isObjectNew(name)
+func (e *Engine) shouldWriteBlock(ov ObjectVersion, blockIndex int, newBlockChecksum string) (bool, error) {
+	isObjectNew, err := e.isObjectNew(ov.Name)
 	if err != nil {
 		return false, err
 	}
@@ -223,7 +195,7 @@ func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, newBlock
 		return true, nil
 	}
 
-	latestVersion, err := e.getLatestVersion(name)
+	latestVersion, err := e.getLatestVersion(ov.Name)
 	if err != nil {
 		return false, err
 	}
@@ -233,7 +205,7 @@ func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, newBlock
 		return true, nil
 	}
 
-	latestBlock, err := e.loadLatestBlock(name, blockIndex)
+	latestBlock, err := e.loadLatestBlock(ov.Name, blockIndex)
 	if err != nil {
 		return false, err
 	}
@@ -242,8 +214,8 @@ func (e *Engine) shouldWriteBlock(name string, version, blockIndex int, newBlock
 	return isBlockChanged, nil
 }
 
-func (e *Engine) writeBytesAsBlock(id string, version int, blockNumber int, p []byte) (string, error) {
-	blockName := id + "-" + strconv.Itoa(version) + "-" + strconv.Itoa(blockNumber) + ".dibk"
+func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) (string, error) {
+	blockName := ov.Name + "-" + strconv.Itoa(ov.Version) + "-" + strconv.Itoa(blockNumber) + ".dibk"
 	path := path.Join(e.storageLocation, blockName)
 	if !isFileNew(path) {
 		return path, fmt.Errorf("Block with name %s already exists", path)
@@ -261,117 +233,6 @@ func (e *Engine) writeBytesAsBlock(id string, version int, blockNumber int, p []
 
 	err = f.Close()
 	return path, err
-}
-
-type writeTask struct {
-	blockNumber int
-	buffer      []byte
-}
-
-func (e *Engine) writeFileInBlocks(file *os.File, id string, version int) ([]writeResult, error) {
-	writer := make(chan writeTask)
-	finished := make(chan writeResult)
-	filler := make(chan []byte)
-	nBlocks, err := e.getNumBlocksInFile(file)
-	if err != nil {
-		return []writeResult{}, err
-	}
-
-	go func() {
-		for true {
-			task := <-writer
-			hash, err := openssl.SHA1(task.buffer)
-			if err != nil {
-				panic(err)
-			}
-
-			blockChecksum := fmt.Sprintf("%x", hash)
-			shouldWrite, err := e.shouldWriteBlock(id, version, task.blockNumber, blockChecksum)
-			if err != nil {
-				panic(err)
-			}
-
-			if shouldWrite {
-				path, err := e.writeBytesAsBlock(id, version, task.blockNumber, task.buffer)
-				if err != nil {
-					panic(err)
-				}
-
-				go func() {
-					finished <- writeResult{path, true, task.blockNumber, blockChecksum}
-				}()
-			} else {
-				go func() {
-					finished <- writeResult{"", false, task.blockNumber, blockChecksum}
-				}()
-			}
-
-			if task.blockNumber == nBlocks-1 {
-				break
-			} else {
-				go func() {
-					filler <- task.buffer
-				}()
-			}
-		}
-	}()
-
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		return []writeResult{}, err
-	}
-
-	go func() {
-		blockNumber := 0
-		for blockNumber < nBlocks {
-			buffer := <-filler
-
-			if blockNumber < nBlocks-1 {
-				_, err = file.Read(buffer)
-			} else {
-				buffer, err = e.getBlockInFile(file, blockNumber) // last block may not be full
-			}
-
-			if err != nil {
-				panic(err)
-			}
-
-			go func(bn int) {
-				writer <- writeTask{bn, buffer}
-			}(blockNumber)
-			blockNumber++
-		}
-	}()
-
-	bufferSize := e.blockSizeInKB * 1024
-	bufferA := make([]byte, bufferSize)
-	bufferB := make([]byte, bufferSize)
-	filler <- bufferA
-	if nBlocks > 1 {
-		filler <- bufferB
-	}
-
-	wg := sync.WaitGroup{}
-	wg.Add(nBlocks)
-
-	var wr []writeResult
-	go func() {
-		for len(wr) < nBlocks {
-			x := <-finished
-			wr = append(wr, x)
-			wg.Done()
-		}
-	}()
-
-	wg.Wait()
-	return wr, nil
-}
-
-type writeResult struct {
-	path        string
-	isNew       bool
-	blockNumber int
-	checksum    string
 }
 
 func (e *Engine) getNextVersionNumber(name string) (int, error) {
@@ -438,23 +299,26 @@ func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 	return nil
 }
 
-// SaveObject saves a binary object.
-func (e *Engine) SaveObject(file *os.File, name string) error {
+func (e *Engine) makeNewerObjectVersion(file *os.File, name string) (ObjectVersion, error) {
 	nextVersion, err := e.getNextVersionNumber(name)
 	if err != nil {
-		return err
+		return ObjectVersion{}, err
 	}
 
-	results, err := e.writeFileInBlocks(file, name, nextVersion)
+	nBlocks, err := e.getNumBlocksInFile(file)
 	if err != nil {
-		return err
+		return ObjectVersion{}, err
 	}
 
-	err = e.db.Create(&ObjectVersion{
+	return ObjectVersion{
 		Name:           name,
 		Version:        nextVersion,
-		NumberOfBlocks: len(results),
-	}).Error
+		NumberOfBlocks: nBlocks,
+	}, nil
+}
+
+func (e *Engine) saveObjectAndBlocksInDatabase(ov ObjectVersion, results []blockWriteResult) error {
+	err := e.db.Create(&ov).Error
 	if err != nil {
 		return err
 	}
@@ -466,8 +330,8 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 				SHA1Checksum: results[i].checksum,
 				Location:     results[i].path,
 				BlockIndex:   results[i].blockNumber,
-				ObjectName:   name,
-				Version:      nextVersion,
+				ObjectName:   ov.Name,
+				Version:      ov.Version,
 			}
 			err = tx.Create(&b).Error
 			if err != nil {
@@ -477,12 +341,22 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 		}
 	}
 
-	err = tx.Commit().Error
+	return tx.Commit().Error
+}
+
+// SaveObject saves a binary object.
+func (e *Engine) SaveObject(file *os.File, name string) error {
+	ov, err := e.makeNewerObjectVersion(file, name)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	results, err := makeFileWriterWorkerPool(e, ov, file).write()
+	if err != nil {
+		return err
+	}
+
+	return e.saveObjectAndBlocksInDatabase(ov, results)
 }
 
 func read(path string, sizeInBytes int) ([]byte, error) {
