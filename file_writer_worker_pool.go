@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/ncw/directio"
+
 	"github.com/spacemonkeygo/openssl"
 )
 
@@ -60,8 +62,8 @@ func (wp *fileWriterWorkerPool) start() error {
 		return err
 	}
 
-	bufferA := make([]byte, wp.bufferSize)
-	bufferB := make([]byte, wp.bufferSize)
+	bufferA := directio.AlignedBlock(wp.bufferSize)
+	bufferB := directio.AlignedBlock(wp.bufferSize)
 	wp.filler <- bufferA
 	if wp.ov.NumberOfBlocks > 1 {
 		wp.filler <- bufferB

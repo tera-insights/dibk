@@ -7,6 +7,8 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/ncw/directio"
+
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // for gorm
 )
@@ -221,7 +223,11 @@ func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) 
 		return path, fmt.Errorf("Block with name %s already exists", path)
 	}
 
-	f, err := os.Create(path)
+	if len(p)%directio.BlockSize != 0 {
+		return "", fmt.Errorf("Passed buffer was not a multilpe of the directio block size\n")
+	}
+
+	f, err := directio.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return path, err
 	}

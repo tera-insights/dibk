@@ -8,6 +8,8 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/ncw/directio"
+
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/urfave/cli"
 )
@@ -131,7 +133,7 @@ func store(c *cli.Context) error {
 		return err
 	}
 
-	file, err := os.Open(inputPath)
+	file, err := directio.OpenFile(inputPath, os.O_RDONLY, 0666)
 	if err != nil {
 		return err
 	}

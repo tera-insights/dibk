@@ -1,6 +1,7 @@
 package dibk
 
 import (
+	"directio"
 	"fmt"
 	"math/rand"
 	"os"
@@ -331,7 +332,11 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 }
 
 func TestFileSizeNotMultipleOfBlockSize(t *testing.T) {
-	fileSize := DefaultJunkFileSizeInMB*1024*1024 + 1
+	fileSize := DefaultJunkFileSizeInMB*1024*1024 + directio.BlockSize
+	if fileSize%(e.blockSizeInKB*1024) == 0 {
+		panic("File size is a multiple of the block size")
+	}
+
 	content := make([]byte, fileSize)
 	_, err := rand.Read(content)
 	if err != nil {
@@ -417,10 +422,10 @@ func isNew(a []int, b int) bool {
 
 func createTemporaryFile() (string, string, *os.File, error) {
 	fileName := "dummy_file_" + strconv.Itoa(rand.Int())
-	filePath := path.Join(os.TempDir(), fileName)
+	filePath := path.Join(e.storageLocation, fileName)
 	for !isFileNew(filePath) {
 		fileName = "dummy_file_" + strconv.Itoa(rand.Int())
-		filePath = path.Join(os.TempDir(), fileName)
+		filePath = path.Join(e.storageLocation, fileName)
 	}
 	file, err := os.Create(filePath)
 	return fileName, filePath, file, err
@@ -495,7 +500,7 @@ func setup() error {
 	e = Engine{
 		db:              testDB,
 		blockSizeInKB:   BlockSizeInKB,
-		storageLocation: os.TempDir(),
+		storageLocation: "/var/tmp",
 	}
 
 	return err
