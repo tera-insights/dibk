@@ -5,7 +5,7 @@ dibk: vendor/ *.go cmd/*.go
 
 test: vendor/
 	go test
-	PATH_TO_EXECUTABLE=cmd/dibk.go DIBK_CONFIG=test/dibk_config.json ./test/cli_test.sh
+	PATH_TO_EXECUTABLE=cmd/dibk.go ./test/cli_test.sh
 
 vendor/: glide.lock glide.yaml
 	glide install

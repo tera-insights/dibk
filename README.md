@@ -12,11 +12,9 @@ We use [`glide`](https://github.com/Masterminds/glide) for dependency management
 
 ## Usage
 
-Make sure the `DIBK_CONFIG` environment variable is set. It should contain a (possibly relative) path to a config file that has the options shown in `test/dibk_config.json`.
-
 ```
-./dibk store --name OBJECT_NAME --input INPUT_FILE
-./dibk retrieve --name OBJECT_NAME --version 1 --output OUTPUT_FILE
+./dibk store --db $DB_PATH --mbperblock $BLOCK_SIZE --storage $STORAGE_LOCATION --name OBJECT_NAME --input INPUT_FILE
+./dibk retrieve --db $DB_PATH --blocksize $BLOCK_SIZE --storage $STORAGE_LOCATION --name OBJECT_NAME --version 1 --output OUTPUT_FILE
 ./dibk help
 ./dibk --version
 ```

@@ -4,8 +4,8 @@ go build $PATH_TO_EXECUTABLE
 
 dd bs=1M count=1 if=/dev/urandom of=a_v1.bin status=none
 
-./dibk store --name a --input a_v1.bin
-./dibk retrieve --name a --version 1 --output a_v1.retrieved
+./dibk store --db ./TEST_DB --mbperblock 10 --storage /var/tmp --name a --input a_v1.bin
+./dibk retrieve --db ./TEST_DB --mbperblock 10 --storage /var/tmp --name a --version 1 --output a_v1.retrieved
 
 test=$(cmp -s a_v1.bin a_v1.retrieved && echo "passed" || echo "failed")
 if [ "failed" == $test ]
@@ -16,8 +16,8 @@ then
 fi
 
 dd bs=1M count=1 if=/dev/urandom of=a_v2.bin status=none
-./dibk store --name a --input a_v2.bin
-./dibk retrieve --name a --version 2 --output a_v2.retrieved
+./dibk store --db ./TEST_DB --mbperblock 10 --storage /var/tmp --name a --input a_v2.bin
+./dibk retrieve --db ./TEST_DB --mbperblock 10 --storage /var/tmp --name a --version 2 --output a_v2.retrieved
 
 test=$(cmp -s a_v2.bin a_v2.retrieved && echo "passed" || echo "failed")
 if [ "failed" == $test ]
@@ -27,7 +27,7 @@ then
   exit 1
 fi
 
-./dibk retrieve --name a --version 1 --output a_v1.retrieved
+./dibk retrieve --db ./TEST_DB --mbperblock 10 --storage /var/tmp --name a --version 1 --output a_v1.retrieved
 test=$(cmp -s a_v1.bin a_v1.retrieved && echo "passed" || echo "failed")
 if [ "failed" == $test ]
 then

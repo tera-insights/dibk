@@ -2,7 +2,6 @@ package main
 
 import (
 	"dibk"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -81,23 +80,6 @@ func buildApp() *cli.App {
 	return app
 }
 
-func readConfig() (dibk.Configuration, error) {
-	path, found := os.LookupEnv("DIBK_CONFIG")
-	if !found {
-		return dibk.Configuration{}, fmt.Errorf("No environment variable DIBK_CONFIG")
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return dibk.Configuration{}, err
-	}
-
-	decoder := json.NewDecoder(file)
-	conf := dibk.Configuration{}
-	err = decoder.Decode(&conf)
-	return conf, err
-}
-
 func store(c *cli.Context) error {
 	name, inputPath, err := parseStoreFlags(c)
 	if err != nil {
@@ -138,9 +120,9 @@ func retrieve(c *cli.Context) error {
 
 func makeEngineFromContext(c *cli.Context) (dibk.Engine, error) {
 	return dibk.MakeEngine(dibk.Configuration{
-		DBPath:            c.String("dbpath"),
-		BlockSizeInBytes:  c.Int("blocksize"),
-		StorageLocation:   c.String("storagelocation"),
+		DBPath:            c.String("db"),
+		BlockSizeInBytes:  c.Int("mbperblock") * 1024 * 1024,
+		StorageLocation:   c.String("storage"),
 		IsDirectIOEnabled: c.Bool("directio"),
 	})
 }
@@ -182,8 +164,8 @@ func parseRetrieveFlags(c *cli.Context) (name string, version int, output string
 func getCommonSubcommandFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.BoolFlag{Name: "directio"},
-		cli.StringFlag{Name: "dbpath"},
-		cli.IntFlag{Name: "blocksize"},
-		cli.StringFlag{Name: "storagelocation"},
+		cli.StringFlag{Name: "db"},
+		cli.IntFlag{Name: "mbperblock"},
+		cli.StringFlag{Name: "storage"},
 	}
 }

@@ -1,5 +1,0 @@
-{
-  "db_path": "TEST_DB",
-  "block_size_in_kb": 1024,
-  "storage_location": "/var/tmp"
-}
