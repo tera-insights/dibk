@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"runtime/pprof"
 	"time"
 
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -71,26 +70,6 @@ func buildApp() *cli.App {
 				return err
 			},
 		},
-	}
-
-	app.Flags = []cli.Flag{
-		cli.StringFlag{Name: "profile"},
-	}
-
-	app.Before = func(c *cli.Context) error {
-		if c.String("profile") != "" {
-			f, err := os.Create(c.String("profile"))
-			if err != nil {
-				return err
-			}
-			pprof.StartCPUProfile(f)
-		}
-		return nil
-	}
-
-	app.After = func(c *cli.Context) error {
-		pprof.StopCPUProfile()
-		return nil
 	}
 
 	app.Action = func(c *cli.Context) error {

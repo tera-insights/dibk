@@ -1,4 +1,4 @@
-.PHONY: test profile clean
+.PHONY: test clean
 
 dibk: vendor/ *.go cmd/*.go
 	go build cmd/dibk.go
@@ -6,9 +6,6 @@ dibk: vendor/ *.go cmd/*.go
 test: vendor/
 	go test
 	PATH_TO_EXECUTABLE=cmd/dibk.go DIBK_CONFIG=test/dibk_config.json ./test/cli_test.sh
-
-profile: vendor/
-	PATH_TO_EXECUTABLE=cmd/dibk.go DIBK_CONFIG=test/dibk_config.json ./test/profile.sh
 
 vendor/: glide.lock glide.yaml
 	glide install
