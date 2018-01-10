@@ -104,7 +104,7 @@ func store(c *cli.Context) error {
 		return err
 	}
 
-	e, err := makeEngine(c)
+	e, err := makeEngineFromContext(c)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func retrieve(c *cli.Context) error {
 		return err
 	}
 
-	e, err := makeEngine(c)
+	e, err := makeEngineFromContext(c)
 	if err != nil {
 		return err
 	}
@@ -136,13 +136,13 @@ func retrieve(c *cli.Context) error {
 	return e.RetrieveObject(file, name, version)
 }
 
-func makeEngine(c *cli.Context) (dibk.Engine, error) {
-	conf, err := readConfig()
-	if err != nil {
-		return dibk.Engine{}, err
-	}
-
-	return dibk.MakeEngine(conf, c.Bool("directio"))
+func makeEngineFromContext(c *cli.Context) (dibk.Engine, error) {
+	return dibk.MakeEngine(dibk.Configuration{
+		DBPath:            c.String("dbpath"),
+		BlockSizeInBytes:  c.Int("blocksize"),
+		StorageLocation:   c.String("storagelocation"),
+		IsDirectIOEnabled: c.Bool("directio"),
+	})
 }
 
 func parseStoreFlags(c *cli.Context) (string, string, error) {
@@ -182,5 +182,8 @@ func parseRetrieveFlags(c *cli.Context) (name string, version int, output string
 func getCommonSubcommandFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.BoolFlag{Name: "directio"},
+		cli.StringFlag{Name: "dbpath"},
+		cli.IntFlag{Name: "blocksize"},
+		cli.StringFlag{Name: "storagelocation"},
 	}
 }
