@@ -35,7 +35,7 @@ type fileWriterWorkerPool struct {
 
 func makeFileWriterWorkerPool(e *Engine, ov ObjectVersion,
 	f *os.File, isDirectIOEnabled bool) *fileWriterWorkerPool {
-	bufferSize := e.blockSizeInKB * 1024
+	bufferSize := e.c.BlockSizeInBytes
 	return &fileWriterWorkerPool{
 		bufferSize:        bufferSize,
 		e:                 e,

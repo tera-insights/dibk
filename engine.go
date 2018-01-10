@@ -15,21 +15,20 @@ import (
 
 // Configuration defines the paths and variables needed to run dibk.
 type Configuration struct {
-	DBPath          string `json:"db_path"`
-	BlockSizeInKB   int    `json:"block_size_in_kb"`
-	StorageLocation string `json:"storage_location"`
+	DBPath            string
+	BlockSizeInBytes  int
+	StorageLocation   string
+	IsDirectIOEnabled bool
 }
 
 // Engine interacts with the database.
 type Engine struct {
-	db                *gorm.DB
-	blockSizeInKB     int
-	storageLocation   string
-	isDirectIOEnabled bool
+	db *gorm.DB
+	c  Configuration
 }
 
 // MakeEngine onnects to the specified DB and runs the `AutoMigrate` steps.
-func MakeEngine(c Configuration, isDirectIOEnabled bool) (Engine, error) {
+func MakeEngine(c Configuration) (Engine, error) {
 	db, err := gorm.Open("sqlite3", c.DBPath)
 	if err != nil {
 		return Engine{}, err
@@ -42,10 +41,8 @@ func MakeEngine(c Configuration, isDirectIOEnabled bool) (Engine, error) {
 
 	err = db.AutoMigrate(Block{}).Error
 	return Engine{
-		db:                db,
-		blockSizeInKB:     c.BlockSizeInKB,
-		storageLocation:   c.StorageLocation,
-		isDirectIOEnabled: isDirectIOEnabled,
+		db: db,
+		c:  c,
 	}, err
 }
 
@@ -160,14 +157,14 @@ func (e *Engine) loadBlockInfos(objectID string, version int) ([]Block, error) {
 }
 
 func (e *Engine) getBlockInFile(source *os.File, index int) ([]byte, error) {
-	offset := int64(e.blockSizeInKB * 1024 * index)
+	offset := int64(e.c.BlockSizeInBytes * index)
 	info, err := source.Stat()
 	if err != nil {
 		return []byte{}, err
 	}
-	remainingBytes := info.Size() - int64(e.blockSizeInKB*1024*index)
+	remainingBytes := info.Size() - int64(e.c.BlockSizeInBytes*index)
 	bufferSize := int(math.Min(float64(remainingBytes),
-		float64(e.blockSizeInKB*1024)))
+		float64(e.c.BlockSizeInBytes)))
 	p := make([]byte, bufferSize)
 	_, err = source.ReadAt(p, offset)
 	return p, err
@@ -178,7 +175,7 @@ func (e *Engine) getNumBlocksInFile(file *os.File) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	return int(math.Ceil(float64(stat.Size()) / float64(e.blockSizeInKB*1024))), nil
+	return int(math.Ceil(float64(stat.Size()) / float64(e.c.BlockSizeInBytes))), nil
 }
 
 func (e *Engine) isObjectNew(name string) (bool, error) {
@@ -219,7 +216,7 @@ func (e *Engine) shouldWriteBlock(ov ObjectVersion, blockIndex int, newBlockChec
 }
 
 func (e *Engine) openFileWithMode(inputPath string, mode int) (*os.File, error) {
-	if e.isDirectIOEnabled {
+	if e.c.IsDirectIOEnabled {
 		return directio.OpenFile(inputPath, mode, 0666)
 	}
 	return os.OpenFile(inputPath, mode, 0666)
@@ -237,12 +234,12 @@ func (e *Engine) CreateFileForWriting(inputPath string) (*os.File, error) {
 
 func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) (string, error) {
 	blockName := ov.Name + "-" + strconv.Itoa(ov.Version) + "-" + strconv.Itoa(blockNumber) + ".dibk"
-	path := path.Join(e.storageLocation, blockName)
+	path := path.Join(e.c.StorageLocation, blockName)
 	if !isFileNew(path) {
 		return path, fmt.Errorf("Block with name %s already exists", path)
 	}
 
-	if e.isDirectIOEnabled && len(p)%directio.BlockSize != 0 {
+	if e.c.IsDirectIOEnabled && len(p)%directio.BlockSize != 0 {
 		return "", fmt.Errorf("Passed buffer was not a multilpe of the directio block size\n")
 	}
 
@@ -314,7 +311,7 @@ func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 			return err
 		}
 
-		offset := int64(e.blockSizeInKB * 1024 * blocks[i].BlockIndex)
+		offset := int64(e.c.BlockSizeInBytes * blocks[i].BlockIndex)
 		n, err := file.WriteAt(p, offset)
 		if n != len(p) {
 			return fmt.Errorf("Did not write all bytes from block")
@@ -376,7 +373,7 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 		return err
 	}
 
-	results, err := makeFileWriterWorkerPool(e, ov, file, e.isDirectIOEnabled).
+	results, err := makeFileWriterWorkerPool(e, ov, file, e.c.IsDirectIOEnabled).
 		write()
 	if err != nil {
 		return err

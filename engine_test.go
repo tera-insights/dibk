@@ -10,17 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // Needed for Gorm
 	"github.com/spacemonkeygo/openssl"
 )
 
-const DBType = "sqlite3"
-const DBName = "TEST_DB"
+const DBPath = "TEST_DB"
+const StorageLocation = "/var/tmp"
+const BlockSizeInBytes = 1024 * 1024
+const IsDirectIOEnabled = false
 const DefaultJunkFileSizeInMB = 2
-const BlockSizeInKB = 1024
 
-var testDB *gorm.DB
 var e Engine
 
 func TestMain(m *testing.M) {
@@ -93,8 +92,8 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newBytes := make([]byte, nBlocks*BlockSizeInKB*1024)
-	oldBytes, err := read(path, nBlocks*BlockSizeInKB*1024)
+	newBytes := make([]byte, nBlocks*BlockSizeInBytes)
+	oldBytes, err := read(path, nBlocks*BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,10 +109,10 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 			index = rand.Int() % nBlocks
 		}
 		changedIndices[i] = index
-		p := make([]byte, BlockSizeInKB*1024)
+		p := make([]byte, BlockSizeInBytes)
 		_, err = rand.Read(p)
-		for j := 0; j < BlockSizeInKB*1024; j++ {
-			offset := index*BlockSizeInKB*1024 + j
+		for j := 0; j < BlockSizeInBytes; j++ {
+			offset := index*BlockSizeInBytes + j
 			newBytes[offset] = p[j]
 		}
 	}
@@ -189,21 +188,21 @@ func TestNewVersionWithLargerSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newBytes := make([]byte, BlockSizeInKB*1024*(nBlocks+1))
-	oldBytes, err := read(path, nBlocks*BlockSizeInKB*1024)
+	newBytes := make([]byte, BlockSizeInBytes*(nBlocks+1))
+	oldBytes, err := read(path, nBlocks*BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	copy(newBytes, oldBytes)
-	p := make([]byte, BlockSizeInKB*1024)
+	p := make([]byte, BlockSizeInBytes)
 	_, err = rand.Read(p)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < len(p); i++ {
-		offset := nBlocks * BlockSizeInKB * 1024
+		offset := nBlocks * BlockSizeInBytes
 		newBytes[offset+i] = p[i]
 	}
 
@@ -240,7 +239,7 @@ func TestNewVersionWithLargerSize(t *testing.T) {
 		}
 	}
 
-	fileChecksum, err := getChecksumForPath(newPath, DefaultJunkFileSizeInMB*1024*1024+BlockSizeInKB*1024)
+	fileChecksum, err := getChecksumForPath(newPath, DefaultJunkFileSizeInMB*1024*1024+BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,8 +274,8 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 		t.Fatalf("Cannot create a smaller file that only has one block")
 	}
 
-	newBytes := make([]byte, BlockSizeInKB*1024*(nBlocks-1))
-	oldBytes, err := read(path, nBlocks*BlockSizeInKB*1024)
+	newBytes := make([]byte, BlockSizeInBytes*(nBlocks-1))
+	oldBytes, err := read(path, nBlocks*BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +315,7 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 		}
 	}
 
-	fileChecksum, err := getChecksumForPath(newPath, DefaultJunkFileSizeInMB*1024*1024-BlockSizeInKB*1024)
+	fileChecksum, err := getChecksumForPath(newPath, DefaultJunkFileSizeInMB*1024*1024-BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +332,7 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 
 func TestFileSizeNotMultipleOfBlockSize(t *testing.T) {
 	fileSize := DefaultJunkFileSizeInMB*1024*1024 + directio.BlockSize
-	if fileSize%(e.blockSizeInKB*1024) == 0 {
+	if fileSize%(e.c.BlockSizeInBytes) == 0 {
 		panic("File size is a multiple of the block size")
 	}
 
@@ -422,10 +421,10 @@ func isNew(a []int, b int) bool {
 
 func createTemporaryFile() (string, string, *os.File, error) {
 	fileName := "dummy_file_" + strconv.Itoa(rand.Int())
-	filePath := path.Join(e.storageLocation, fileName)
+	filePath := path.Join(e.c.StorageLocation, fileName)
 	for !isFileNew(filePath) {
 		fileName = "dummy_file_" + strconv.Itoa(rand.Int())
-		filePath = path.Join(e.storageLocation, fileName)
+		filePath = path.Join(e.c.StorageLocation, fileName)
 	}
 	file, err := os.Create(filePath)
 	return fileName, filePath, file, err
@@ -459,7 +458,7 @@ func getChecksumForBlocks(blocks []Block) (string, error) {
 			return "", err
 		}
 
-		baseIndex := blocks[i].BlockIndex * BlockSizeInKB * 1024
+		baseIndex := blocks[i].BlockIndex * BlockSizeInBytes
 		for j := 0; j < int(info.Size()); j++ {
 			p[baseIndex+j] = q[j]
 		}
@@ -483,38 +482,23 @@ func getSizeOfBlocks(blocks []Block) (int64, error) {
 
 func setup() error {
 	rand.Seed(time.Now().UTC().UnixNano())
-
-	db, err := gorm.Open(DBType, DBName)
-	if err != nil {
-		return err
-	}
-
-	testDB = db
-	err = testDB.AutoMigrate(&ObjectVersion{}).Error
-	if err != nil {
-		return err
-	}
-
-	err = testDB.AutoMigrate(&Block{}).Error
-
-	e = Engine{
-		db:              testDB,
-		blockSizeInKB:   BlockSizeInKB,
-		storageLocation: "/var/tmp",
-	}
-
+	engine, err := MakeEngine(Configuration{
+		DBPath:            DBPath,
+		BlockSizeInBytes:  BlockSizeInBytes,
+		StorageLocation:   StorageLocation,
+		IsDirectIOEnabled: IsDirectIOEnabled,
+	})
+	e = engine
 	return err
 }
 
 func teardown() error {
-	err := testDB.Close()
+	err := e.db.Close()
 	if err != nil {
 		return err
 	}
 
-	if DBType == "sqlite3" {
-		return os.Remove(DBName)
-	}
+	os.Remove(DBPath)
 	return nil
 }
 

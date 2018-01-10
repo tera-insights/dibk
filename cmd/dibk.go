@@ -104,7 +104,7 @@ func store(c *cli.Context) error {
 		return err
 	}
 
-	e, err := makeEngineFromConfig(c)
+	e, err := makeEngine(c)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func retrieve(c *cli.Context) error {
 		return err
 	}
 
-	e, err := makeEngineFromConfig(c)
+	e, err := makeEngine(c)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func retrieve(c *cli.Context) error {
 	return e.RetrieveObject(file, name, version)
 }
 
-func makeEngineFromConfig(c *cli.Context) (dibk.Engine, error) {
+func makeEngine(c *cli.Context) (dibk.Engine, error) {
 	conf, err := readConfig()
 	if err != nil {
 		return dibk.Engine{}, err
