@@ -22,13 +22,14 @@ type Configuration struct {
 
 // Engine interacts with the database.
 type Engine struct {
-	db              *gorm.DB
-	blockSizeInKB   int
-	storageLocation string
+	db                *gorm.DB
+	blockSizeInKB     int
+	storageLocation   string
+	isDirectIOEnabled bool
 }
 
 // MakeEngine onnects to the specified DB and runs the `AutoMigrate` steps.
-func MakeEngine(c Configuration) (Engine, error) {
+func MakeEngine(c Configuration, isDirectIOEnabled bool) (Engine, error) {
 	db, err := gorm.Open("sqlite3", c.DBPath)
 	if err != nil {
 		return Engine{}, err
@@ -41,9 +42,10 @@ func MakeEngine(c Configuration) (Engine, error) {
 
 	err = db.AutoMigrate(Block{}).Error
 	return Engine{
-		db:              db,
-		blockSizeInKB:   c.BlockSizeInKB,
-		storageLocation: c.StorageLocation,
+		db:                db,
+		blockSizeInKB:     c.BlockSizeInKB,
+		storageLocation:   c.StorageLocation,
+		isDirectIOEnabled: isDirectIOEnabled,
 	}, err
 }
 
@@ -216,6 +218,23 @@ func (e *Engine) shouldWriteBlock(ov ObjectVersion, blockIndex int, newBlockChec
 	return isBlockChanged, nil
 }
 
+func (e *Engine) openFileWithMode(inputPath string, mode int) (*os.File, error) {
+	if e.isDirectIOEnabled {
+		return directio.OpenFile(inputPath, mode, 0666)
+	}
+	return os.OpenFile(inputPath, mode, 0666)
+}
+
+// OpenFileForReading opens a file for reading, possibly using directIO.
+func (e *Engine) OpenFileForReading(inputPath string) (*os.File, error) {
+	return e.openFileWithMode(inputPath, os.O_RDONLY)
+}
+
+// CreateFileForWriting creates a file for writing, possibly using directIO.
+func (e *Engine) CreateFileForWriting(inputPath string) (*os.File, error) {
+	return e.openFileWithMode(inputPath, os.O_CREATE|os.O_WRONLY)
+}
+
 func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) (string, error) {
 	blockName := ov.Name + "-" + strconv.Itoa(ov.Version) + "-" + strconv.Itoa(blockNumber) + ".dibk"
 	path := path.Join(e.storageLocation, blockName)
@@ -223,11 +242,11 @@ func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) 
 		return path, fmt.Errorf("Block with name %s already exists", path)
 	}
 
-	if len(p)%directio.BlockSize != 0 {
+	if e.isDirectIOEnabled && len(p)%directio.BlockSize != 0 {
 		return "", fmt.Errorf("Passed buffer was not a multilpe of the directio block size\n")
 	}
 
-	f, err := directio.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+	f, err := e.CreateFileForWriting(path)
 	if err != nil {
 		return path, err
 	}
@@ -357,7 +376,8 @@ func (e *Engine) SaveObject(file *os.File, name string) error {
 		return err
 	}
 
-	results, err := makeFileWriterWorkerPool(e, ov, file).write()
+	results, err := makeFileWriterWorkerPool(e, ov, file, e.isDirectIOEnabled).
+		write()
 	if err != nil {
 		return err
 	}

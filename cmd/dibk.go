@@ -8,8 +8,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/ncw/directio"
-
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/urfave/cli"
 )
@@ -36,10 +34,10 @@ func buildApp() *cli.App {
 		cli.Command{
 			Name:  "store",
 			Usage: "Store a version of a binary",
-			Flags: []cli.Flag{
+			Flags: append([]cli.Flag{
 				cli.StringFlag{Name: "name"},
 				cli.StringFlag{Name: "input"},
-			},
+			}, getCommonSubcommandFlags()...),
 			SkipFlagParsing: false,
 			HideHelp:        false,
 			Hidden:          false,
@@ -56,11 +54,11 @@ func buildApp() *cli.App {
 		cli.Command{
 			Name:  "retrieve",
 			Usage: "Retrieve a version of a binary",
-			Flags: []cli.Flag{
+			Flags: append([]cli.Flag{
 				cli.StringFlag{Name: "name"},
 				cli.IntFlag{Name: "version"},
 				cli.StringFlag{Name: "output"},
-			},
+			}, getCommonSubcommandFlags()...),
 			SkipFlagParsing: false,
 			HideHelp:        false,
 			Hidden:          false,
@@ -83,7 +81,6 @@ func buildApp() *cli.App {
 		if c.String("profile") != "" {
 			f, err := os.Create(c.String("profile"))
 			if err != nil {
-				fmt.Printf("found an error here %v\n", err)
 				return err
 			}
 			pprof.StartCPUProfile(f)
@@ -128,12 +125,12 @@ func store(c *cli.Context) error {
 		return err
 	}
 
-	e, err := makeEngineFromConfig()
+	e, err := makeEngineFromConfig(c)
 	if err != nil {
 		return err
 	}
 
-	file, err := directio.OpenFile(inputPath, os.O_RDONLY, 0666)
+	file, err := e.OpenFileForReading(inputPath)
 	if err != nil {
 		return err
 	}
@@ -147,7 +144,7 @@ func retrieve(c *cli.Context) error {
 		return err
 	}
 
-	e, err := makeEngineFromConfig()
+	e, err := makeEngineFromConfig(c)
 	if err != nil {
 		return err
 	}
@@ -160,13 +157,13 @@ func retrieve(c *cli.Context) error {
 	return e.RetrieveObject(file, name, version)
 }
 
-func makeEngineFromConfig() (dibk.Engine, error) {
+func makeEngineFromConfig(c *cli.Context) (dibk.Engine, error) {
 	conf, err := readConfig()
 	if err != nil {
 		return dibk.Engine{}, err
 	}
 
-	return dibk.MakeEngine(conf)
+	return dibk.MakeEngine(conf, c.Bool("directio"))
 }
 
 func parseStoreFlags(c *cli.Context) (string, string, error) {
@@ -201,4 +198,10 @@ func parseRetrieveFlags(c *cli.Context) (name string, version int, output string
 	}
 
 	return
+}
+
+func getCommonSubcommandFlags() []cli.Flag {
+	return []cli.Flag{
+		cli.BoolFlag{Name: "directio"},
+	}
 }

@@ -23,26 +23,28 @@ type blockWriteResult struct {
 }
 
 type fileWriterWorkerPool struct {
-	bufferSize int
-	e          *Engine
-	ov         ObjectVersion
-	file       *os.File
-	writer     chan blockWriteTask
-	filler     chan []byte
-	finished   chan blockWriteResult
+	bufferSize        int
+	e                 *Engine
+	ov                ObjectVersion
+	file              *os.File
+	writer            chan blockWriteTask
+	filler            chan []byte
+	finished          chan blockWriteResult
+	isDirectIOEnabled bool
 }
 
 func makeFileWriterWorkerPool(e *Engine, ov ObjectVersion,
-	f *os.File) *fileWriterWorkerPool {
+	f *os.File, isDirectIOEnabled bool) *fileWriterWorkerPool {
 	bufferSize := e.blockSizeInKB * 1024
 	return &fileWriterWorkerPool{
-		bufferSize: bufferSize,
-		e:          e,
-		ov:         ov,
-		file:       f,
-		filler:     make(chan []byte),
-		finished:   make(chan blockWriteResult),
-		writer:     make(chan blockWriteTask),
+		bufferSize:        bufferSize,
+		e:                 e,
+		ov:                ov,
+		file:              f,
+		filler:            make(chan []byte),
+		finished:          make(chan blockWriteResult),
+		writer:            make(chan blockWriteTask),
+		isDirectIOEnabled: isDirectIOEnabled,
 	}
 }
 
@@ -62,14 +64,21 @@ func (wp *fileWriterWorkerPool) start() error {
 		return err
 	}
 
-	bufferA := directio.AlignedBlock(wp.bufferSize)
-	bufferB := directio.AlignedBlock(wp.bufferSize)
+	bufferA := wp.makeBufferForFile()
+	bufferB := wp.makeBufferForFile()
 	wp.filler <- bufferA
 	if wp.ov.NumberOfBlocks > 1 {
 		wp.filler <- bufferB
 	}
 
 	return nil
+}
+
+func (wp *fileWriterWorkerPool) makeBufferForFile() []byte {
+	if wp.isDirectIOEnabled {
+		return directio.AlignedBlock(wp.bufferSize)
+	}
+	return make([]byte, wp.bufferSize)
 }
 
 func (wp *fileWriterWorkerPool) getResults() []blockWriteResult {
