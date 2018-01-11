@@ -35,6 +35,7 @@ func buildApp() *cli.App {
 			Flags: append([]cli.Flag{
 				cli.StringFlag{Name: "name"},
 				cli.StringFlag{Name: "input"},
+				cli.IntFlag{Name: "mbperblock"},
 			}, getCommonSubcommandFlags()...),
 			SkipFlagParsing: false,
 			HideHelp:        false,
@@ -96,7 +97,7 @@ func store(c *cli.Context) error {
 		return err
 	}
 
-	return e.SaveObject(file, name)
+	return e.SaveObject(file, name, c.Int("mbperblock")*1024*1024)
 }
 
 func retrieve(c *cli.Context) error {
@@ -121,7 +122,6 @@ func retrieve(c *cli.Context) error {
 func makeEngineFromContext(c *cli.Context) (dibk.Engine, error) {
 	return dibk.MakeEngine(dibk.Configuration{
 		DBPath:            c.String("db"),
-		BlockSizeInBytes:  c.Int("mbperblock") * 1024 * 1024,
 		StorageLocation:   c.String("storage"),
 		IsDirectIOEnabled: c.Bool("directio"),
 	})
@@ -165,7 +165,6 @@ func getCommonSubcommandFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.BoolFlag{Name: "directio"},
 		cli.StringFlag{Name: "db"},
-		cli.IntFlag{Name: "mbperblock"},
 		cli.StringFlag{Name: "storage"},
 	}
 }

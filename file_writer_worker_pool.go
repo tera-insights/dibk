@@ -35,9 +35,8 @@ type fileWriterWorkerPool struct {
 
 func makeFileWriterWorkerPool(e *Engine, ov ObjectVersion,
 	f *os.File, isDirectIOEnabled bool) *fileWriterWorkerPool {
-	bufferSize := e.c.BlockSizeInBytes
 	return &fileWriterWorkerPool{
-		bufferSize:        bufferSize,
+		bufferSize:        ov.BlockSize,
 		e:                 e,
 		ov:                ov,
 		file:              f,
@@ -112,7 +111,7 @@ func (wp *fileWriterWorkerPool) startAsynchronousReader() error {
 			if isBlockDefinitelyFull {
 				_, err = wp.file.Read(buffer)
 			} else {
-				buffer, err = wp.e.getBlockInFile(wp.file, blockNumber)
+				buffer, err = wp.e.getBlockInFile(wp.file, wp.ov.BlockSize, blockNumber)
 			}
 
 			if err != nil {

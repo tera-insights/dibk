@@ -72,7 +72,7 @@ func createAndSaveNewJunkFile() (objectName string, path string, file *os.File, 
 		return
 	}
 
-	err = e.SaveObject(file, objectName)
+	err = e.SaveObject(file, objectName, BlockSizeInBytes)
 	return
 }
 
@@ -87,7 +87,7 @@ func TestChangingBlocksWithSameSizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nBlocks, err := e.getNumBlocksInFile(file)
+	nBlocks, err := e.getNumBlocksInFile(file, BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestNewVersionWithLargerSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nBlocks, err := e.getNumBlocksInFile(file)
+	nBlocks, err := e.getNumBlocksInFile(file, BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nBlocks, err := e.getNumBlocksInFile(file)
+	nBlocks, err := e.getNumBlocksInFile(file, BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestNewVersionWithSmallerSize(t *testing.T) {
 
 func TestFileSizeNotMultipleOfBlockSize(t *testing.T) {
 	fileSize := DefaultJunkFileSizeInMB*1024*1024 + directio.BlockSize
-	if fileSize%(e.c.BlockSizeInBytes) == 0 {
+	if fileSize%(BlockSizeInBytes) == 0 {
 		panic("File size is a multiple of the block size")
 	}
 
@@ -388,7 +388,7 @@ func createAndSaveFile(objectName string, content []byte) (path string, err erro
 		return path, err
 	}
 
-	return path, e.SaveObject(newFile, objectName)
+	return path, e.SaveObject(newFile, objectName, BlockSizeInBytes)
 }
 
 func isEqual(a, b []Block) bool {
@@ -484,7 +484,6 @@ func setup() error {
 	rand.Seed(time.Now().UTC().UnixNano())
 	engine, err := MakeEngine(Configuration{
 		DBPath:            DBPath,
-		BlockSizeInBytes:  BlockSizeInBytes,
 		StorageLocation:   StorageLocation,
 		IsDirectIOEnabled: IsDirectIOEnabled,
 	})

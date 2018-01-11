@@ -16,7 +16,6 @@ import (
 // Configuration defines the paths and variables needed to run dibk.
 type Configuration struct {
 	DBPath            string
-	BlockSizeInBytes  int
 	StorageLocation   string
 	IsDirectIOEnabled bool
 }
@@ -156,26 +155,26 @@ func (e *Engine) loadBlockInfos(objectID string, version int) ([]Block, error) {
 	return getLatestBlocks(ov, all)
 }
 
-func (e *Engine) getBlockInFile(source *os.File, index int) ([]byte, error) {
-	offset := int64(e.c.BlockSizeInBytes * index)
+func (e *Engine) getBlockInFile(source *os.File, blockSize, index int) ([]byte, error) {
+	offset := int64(blockSize * index)
 	info, err := source.Stat()
 	if err != nil {
 		return []byte{}, err
 	}
-	remainingBytes := info.Size() - int64(e.c.BlockSizeInBytes*index)
+	remainingBytes := info.Size() - int64(blockSize*index)
 	bufferSize := int(math.Min(float64(remainingBytes),
-		float64(e.c.BlockSizeInBytes)))
+		float64(blockSize)))
 	p := make([]byte, bufferSize)
 	_, err = source.ReadAt(p, offset)
 	return p, err
 }
 
-func (e *Engine) getNumBlocksInFile(file *os.File) (int, error) {
+func (e *Engine) getNumBlocksInFile(file *os.File, blockSize int) (int, error) {
 	stat, err := file.Stat()
 	if err != nil {
 		return -1, err
 	}
-	return int(math.Ceil(float64(stat.Size()) / float64(e.c.BlockSizeInBytes))), nil
+	return int(math.Ceil(float64(stat.Size()) / float64(blockSize))), nil
 }
 
 func (e *Engine) isObjectNew(name string) (bool, error) {
@@ -282,10 +281,11 @@ func (e *Engine) getNextVersionNumber(name string) (int, error) {
 // RetrieveObject retrieves a particular object version.
 func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 	var count int64
+	var ov ObjectVersion
 	err := e.db.Model(&ObjectVersion{}).Where(&ObjectVersion{
 		Name:    name,
 		Version: version,
-	}).Count(&count).Error
+	}).Count(&count).First(&ov).Error
 
 	if err != nil {
 		return err
@@ -311,7 +311,7 @@ func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 			return err
 		}
 
-		offset := int64(e.c.BlockSizeInBytes * blocks[i].BlockIndex)
+		offset := int64(ov.BlockSize * blocks[i].BlockIndex)
 		n, err := file.WriteAt(p, offset)
 		if n != len(p) {
 			return fmt.Errorf("Did not write all bytes from block")
@@ -321,13 +321,13 @@ func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 	return nil
 }
 
-func (e *Engine) makeNewerObjectVersion(file *os.File, name string) (ObjectVersion, error) {
+func (e *Engine) makeNewerObjectVersion(file *os.File, name string, blockSize int) (ObjectVersion, error) {
 	nextVersion, err := e.getNextVersionNumber(name)
 	if err != nil {
 		return ObjectVersion{}, err
 	}
 
-	nBlocks, err := e.getNumBlocksInFile(file)
+	nBlocks, err := e.getNumBlocksInFile(file, blockSize)
 	if err != nil {
 		return ObjectVersion{}, err
 	}
@@ -336,6 +336,7 @@ func (e *Engine) makeNewerObjectVersion(file *os.File, name string) (ObjectVersi
 		Name:           name,
 		Version:        nextVersion,
 		NumberOfBlocks: nBlocks,
+		BlockSize:      blockSize,
 	}, nil
 }
 
@@ -367,8 +368,8 @@ func (e *Engine) saveObjectAndBlocksInDatabase(ov ObjectVersion, results []block
 }
 
 // SaveObject saves a binary object.
-func (e *Engine) SaveObject(file *os.File, name string) error {
-	ov, err := e.makeNewerObjectVersion(file, name)
+func (e *Engine) SaveObject(file *os.File, name string, blockSize int) error {
+	ov, err := e.makeNewerObjectVersion(file, name, blockSize)
 	if err != nil {
 		return err
 	}

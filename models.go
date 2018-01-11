@@ -13,5 +13,6 @@ type Block struct {
 type ObjectVersion struct {
 	Name           string `gorm:"unique_index:id_version"`
 	Version        int    `gorm:"unique_index:id_version"`
+	BlockSize      int
 	NumberOfBlocks int
 }
