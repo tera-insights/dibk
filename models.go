@@ -1,4 +1,4 @@
-package dibk
+package edis
 
 // Block is the Gorm model that represents a single block of the file.
 type Block struct {

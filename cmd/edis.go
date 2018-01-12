@@ -1,7 +1,7 @@
 package main
 
 import (
-	"dibk"
+	"edis"
 	"fmt"
 	"os"
 	"strings"
@@ -18,8 +18,8 @@ func main() {
 
 func buildApp() *cli.App {
 	app := cli.NewApp()
-	app.Description = "Disk image backup"
-	app.Name = "dibk"
+	app.Description = "Encrypted Disk Image Storage"
+	app.Name = "edis"
 	app.Version = "0.1.0"
 	app.Compiled = time.Now()
 	app.Authors = []cli.Author{
@@ -74,8 +74,8 @@ func retrieve(c *cli.Context) error {
 	return e.RetrieveObject(c.String("output"), c.String("name"), c.Int("version"))
 }
 
-func makeEngineFromContext(c *cli.Context) (dibk.Engine, error) {
-	return dibk.MakeEngine(dibk.Configuration{
+func makeEngineFromContext(c *cli.Context) (edis.Engine, error) {
+	return edis.MakeEngine(edis.Configuration{
 		DBPath:            c.String("db"),
 		StorageLocation:   c.String("storage"),
 		IsDirectIOEnabled: c.Bool("directio"),
@@ -114,7 +114,7 @@ func buildRequiredFlagText(flags []string) string {
 
 func buildStoreCommand() cli.Command {
 	requiredFlags := []string{"name", "input", "db", "storage"}
-	usageText := "dibk store " + buildRequiredFlagText(requiredFlags)
+	usageText := "edis store " + buildRequiredFlagText(requiredFlags)
 
 	return cli.Command{
 		Name:  "store",
@@ -150,7 +150,7 @@ func buildStoreCommand() cli.Command {
 
 func buildRetrieveCommand() cli.Command {
 	requiredFlags := []string{"name", "output", "db", "storage"}
-	usageText := "\ndibk retrieve --latest " + buildRequiredFlagText(requiredFlags) + "\ndibk retrieve --version $VERSION " + buildRequiredFlagText(requiredFlags)
+	usageText := "\nedis retrieve --latest " + buildRequiredFlagText(requiredFlags) + "\nedis retrieve --version $VERSION " + buildRequiredFlagText(requiredFlags)
 
 	return cli.Command{
 		Name:      "retrieve",

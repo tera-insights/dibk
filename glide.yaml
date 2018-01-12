@@ -1,4 +1,4 @@
-package: dibk
+package: edis
 import:
 - package: github.com/jinzhu/gorm
   version: v1.0

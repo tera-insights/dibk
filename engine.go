@@ -1,4 +1,4 @@
-package dibk
+package edis
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // for gorm
 )
 
-// Configuration defines the paths and variables needed to run dibk.
+// Configuration defines the paths and variables needed to run edis.
 type Configuration struct {
 	DBPath            string
 	StorageLocation   string
@@ -232,7 +232,7 @@ func (e *Engine) CreateFileForWriting(p string) (*os.File, error) {
 }
 
 func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) (string, error) {
-	blockName := ov.Name + "-" + strconv.Itoa(ov.Version) + "-" + strconv.Itoa(blockNumber) + ".dibk"
+	blockName := ov.Name + "-" + strconv.Itoa(ov.Version) + "-" + strconv.Itoa(blockNumber) + ".edis"
 	path := path.Join(e.c.StorageLocation, blockName)
 	if !isFileNew(path) {
 		return path, fmt.Errorf("Block with name %s already exists", path)

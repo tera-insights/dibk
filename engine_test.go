@@ -1,4 +1,4 @@
-package dibk
+package edis
 
 import (
 	"directio"
