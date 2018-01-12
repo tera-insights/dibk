@@ -4,6 +4,7 @@ import (
 	"dibk"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -29,47 +30,8 @@ func buildApp() *cli.App {
 	}
 
 	app.Commands = []cli.Command{
-		cli.Command{
-			Name:  "store",
-			Usage: "Store a version of a binary",
-			Flags: append([]cli.Flag{
-				cli.StringFlag{Name: "name"},
-				cli.StringFlag{Name: "input"},
-				cli.IntFlag{Name: "mbperblock"},
-			}, getCommonSubcommandFlags()...),
-			SkipFlagParsing: false,
-			HideHelp:        false,
-			Hidden:          false,
-			Action: func(c *cli.Context) error {
-				err := store(c)
-				if err != nil {
-					fmt.Printf("Error = %v\n", err)
-					fmt.Println("Usage: dibk store --name OBJECT_NAME --input INPUT_FILE")
-				}
-				return err
-			},
-		},
-
-		cli.Command{
-			Name:  "retrieve",
-			Usage: "Retrieve a version of a binary",
-			Flags: append([]cli.Flag{
-				cli.StringFlag{Name: "name"},
-				cli.IntFlag{Name: "version"},
-				cli.StringFlag{Name: "output"},
-			}, getCommonSubcommandFlags()...),
-			SkipFlagParsing: false,
-			HideHelp:        false,
-			Hidden:          false,
-			Action: func(c *cli.Context) error {
-				err := retrieve(c)
-				if err != nil {
-					fmt.Printf("Error = %v\n", err)
-					fmt.Println("Usage: dibk retrieve --name OBJECT_NAME --version OBJECT_VERSION --output OUTPUT_FILE")
-				}
-				return err
-			},
-		},
+		buildStoreCommand(),
+		buildRetrieveCommand(),
 	}
 
 	app.Action = func(c *cli.Context) error {
@@ -166,5 +128,84 @@ func getCommonSubcommandFlags() []cli.Flag {
 		cli.BoolFlag{Name: "directio"},
 		cli.StringFlag{Name: "db"},
 		cli.StringFlag{Name: "storage"},
+	}
+}
+
+func buildRequiredFlagText(flags []string) string {
+	s := ""
+	for _, f := range flags {
+		s += fmt.Sprintf("--%s $%s ", f, strings.ToUpper(f))
+	}
+	return strings.TrimSuffix(s, " ")
+}
+
+func buildStoreCommand() cli.Command {
+	requiredFlags := []string{"name", "input", "db", "storage"}
+	usageText := "dibk store " + buildRequiredFlagText(requiredFlags)
+
+	return cli.Command{
+		Name:  "store",
+		Usage: "Store a version of a binary",
+		Flags: append([]cli.Flag{
+			cli.StringFlag{Name: "name"},
+			cli.StringFlag{Name: "input"},
+			cli.IntFlag{Name: "mbperblock", Value: 10},
+		}, getCommonSubcommandFlags()...),
+		SkipFlagParsing: false,
+		HideHelp:        false,
+		Hidden:          false,
+		UsageText:       usageText,
+		Action: func(c *cli.Context) error {
+			for _, flag := range requiredFlags {
+				if !c.IsSet(flag) {
+					err := fmt.Errorf("Required option \"%s\" is missing", flag)
+					fmt.Println(err)
+					fmt.Println("Usage: " + usageText)
+					return err
+				}
+			}
+
+			err := store(c)
+			if err != nil {
+				fmt.Printf("Error = %v\n", err)
+				fmt.Println("Usage: " + usageText)
+			}
+			return err
+		},
+	}
+}
+
+func buildRetrieveCommand() cli.Command {
+	requiredFlags := []string{"name", "output", "version", "db", "storage"}
+	usageText := "dibk retrieve " + buildRequiredFlagText(requiredFlags)
+
+	return cli.Command{
+		Name:  "retrieve",
+		Usage: "Retrieve a version of a binary",
+		Flags: append([]cli.Flag{
+			cli.StringFlag{Name: "name"},
+			cli.IntFlag{Name: "version"},
+			cli.StringFlag{Name: "output"},
+		}, getCommonSubcommandFlags()...),
+		SkipFlagParsing: false,
+		HideHelp:        false,
+		Hidden:          false,
+		Action: func(c *cli.Context) error {
+			for _, flag := range requiredFlags {
+				if !c.IsSet(flag) {
+					err := fmt.Errorf("Required option \"%s\" is missing", flag)
+					fmt.Println(err)
+					fmt.Println("Usage: " + usageText)
+					return err
+				}
+			}
+
+			err := retrieve(c)
+			if err != nil {
+				fmt.Printf("Error = %v\n", err)
+				fmt.Println("Usage: " + usageText)
+			}
+			return err
+		},
 	}
 }
