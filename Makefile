@@ -1,13 +1,17 @@
-CC=clang++-3.9
-CFLAGS=-O0 -Wall -I src/ -std=c++11 -c 
+.PHONY: test clean
 
-all: dibk
+edis: vendor/ *.go cmd/*.go
+	go build cmd/edis.go
 
-.cpp.o:
-	$(CC) $(CFLAGS) $< -o $@
+test: vendor/
+	go test
+	PATH_TO_EXECUTABLE=cmd/edis.go ./test/cli_test.sh
 
-dibk: src/dibk.o src/Hash.o src/HashMap.o
-	${CC} src/*.o -o dibk -lcrypto
+vendor/: glide.lock glide.yaml
+	glide install
+	go install edis/vendor/github.com/mattn/go-sqlite3
+	go install edis/vendor/github.com/spacemonkeygo/openssl
 
 clean:
-	rm -f src/*.o
+	rm -r vendor
+	rm edis

@@ -1,13 +1,26 @@
-# dibk
-Disk Image Backup
+# edis
 
+Encrypted Disk Image Storage
 
-# Testing
+## Dependencies
 
-1. Create a file `dd if=/dev/zero of=myFile.bin bs=1M count=1024`
-2. Create a file system inside the file `mke2fs myFile.bin`
-3. Backup the empty file system `dibk myFile.bin myBkdir 1024`
-4. Mount the file system `mount linux.ex2 /mnt -o loop=/dev/loop0`
-5. Write files to it `cp -R myDir/* /mnt`
-5. Unmount the filesystem `umount /mnt`
-6. Backup the file again `dibk myFile.bin myBkdir 1024`
+We use [`glide`](https://github.com/Masterminds/glide) for dependency management. `sqlite3` must be installed to run the [tests](#Testing).
+
+## Building
+
+`make edis`
+
+## Usage
+
+```
+./edis store --db $DB_PATH --mbperblock $BLOCK_SIZE --storage $STORAGE_LOCATION --name $OBJECT_NAME --input $INPUT_FILE
+./edis retrieve --db $DB_PATH --storage $STORAGE_LOCATION --name $OBJECT_NAME --latest --output OUTPUT_FILE
+./edis help
+./edis --version
+```
+
+See `./edis store --help` and `./edis store --retrieve` for descriptions of the flags.
+
+## Testing
+
+`make test`
