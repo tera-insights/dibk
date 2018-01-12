@@ -214,21 +214,21 @@ func (e *Engine) shouldWriteBlock(ov ObjectVersion, blockIndex int, newBlockChec
 	return isBlockChanged, nil
 }
 
-func (e *Engine) openFileWithMode(inputPath string, mode int) (*os.File, error) {
+func (e *Engine) openFileWithMode(path string, mode int) (*os.File, error) {
 	if e.c.IsDirectIOEnabled {
-		return directio.OpenFile(inputPath, mode, 0666)
+		return directio.OpenFile(path, mode, 0666)
 	}
-	return os.OpenFile(inputPath, mode, 0666)
+	return os.OpenFile(path, mode, 0666)
 }
 
 // OpenFileForReading opens a file for reading, possibly using directIO.
-func (e *Engine) OpenFileForReading(inputPath string) (*os.File, error) {
-	return e.openFileWithMode(inputPath, os.O_RDONLY)
+func (e *Engine) OpenFileForReading(p string) (*os.File, error) {
+	return e.openFileWithMode(p, os.O_RDONLY)
 }
 
 // CreateFileForWriting creates a file for writing, possibly using directIO.
-func (e *Engine) CreateFileForWriting(inputPath string) (*os.File, error) {
-	return e.openFileWithMode(inputPath, os.O_CREATE|os.O_WRONLY)
+func (e *Engine) CreateFileForWriting(p string) (*os.File, error) {
+	return e.openFileWithMode(p, os.O_CREATE|os.O_WRONLY)
 }
 
 func (e *Engine) writeBytesAsBlock(ov ObjectVersion, blockNumber int, p []byte) (string, error) {
@@ -278,18 +278,18 @@ func (e *Engine) getNextVersionNumber(name string) (int, error) {
 	return ov.Version + 1, nil
 }
 
-// RetrieveLatestVersionOfObject writes the latest version of the object with the given name to the given file. If the object does not exist or any other errors occur, returns an error.
-func (e *Engine) RetrieveLatestVersionOfObject(file *os.File, name string) error {
+// RetrieveLatestVersionOfObject writes the latest version of the object with the given name to the given path. If the object does not exist or any other errors occur, returns an error.
+func (e *Engine) RetrieveLatestVersionOfObject(filePath, name string) error {
 	ov, err := e.getLatestVersion(name)
 	if err != nil {
 		return err
 	}
 
-	return e.RetrieveObject(file, name, ov.Version)
+	return e.RetrieveObject(filePath, name, ov.Version)
 }
 
 // RetrieveObject retrieves a particular object version.
-func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
+func (e *Engine) RetrieveObject(filePath string, name string, version int) error {
 	var count int64
 	var ov ObjectVersion
 	err := e.db.Model(&ObjectVersion{}).Where(&ObjectVersion{
@@ -303,6 +303,11 @@ func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 
 	if count == 0 {
 		return fmt.Errorf("Cannot retrieve object that doesn't exist")
+	}
+
+	file, err := e.CreateFileForWriting(filePath)
+	if err != nil {
+		return err
 	}
 
 	blocks, err := e.loadBlockInfos(name, version)

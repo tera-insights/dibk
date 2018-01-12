@@ -68,15 +68,10 @@ func retrieve(c *cli.Context) error {
 		return err
 	}
 
-	file, err := os.Create(c.String("output"))
-	if err != nil {
-		return err
-	}
-
 	if c.Bool("latest") {
-		return e.RetrieveLatestVersionOfObject(file, c.String("name"))
+		return e.RetrieveLatestVersionOfObject(c.String("output"), c.String("name"))
 	}
-	return e.RetrieveObject(file, c.String("name"), c.Int("version"))
+	return e.RetrieveObject(c.String("output"), c.String("name"), c.Int("version"))
 }
 
 func makeEngineFromContext(c *cli.Context) (dibk.Engine, error) {
@@ -155,7 +150,7 @@ func buildStoreCommand() cli.Command {
 
 func buildRetrieveCommand() cli.Command {
 	requiredFlags := []string{"name", "output", "db", "storage"}
-	usageText := "dibk retrieve --latest " + buildRequiredFlagText(requiredFlags) + "\n\t dibk retrieve --version $VERSION " + buildRequiredFlagText(requiredFlags)
+	usageText := "\ndibk retrieve --latest " + buildRequiredFlagText(requiredFlags) + "\ndibk retrieve --version $VERSION " + buildRequiredFlagText(requiredFlags)
 
 	return cli.Command{
 		Name:      "retrieve",
