@@ -63,22 +63,20 @@ func store(c *cli.Context) error {
 }
 
 func retrieve(c *cli.Context) error {
-	name, version, outputPath, err := parseRetrieveFlags(c)
-	if err != nil {
-		return err
-	}
-
 	e, err := makeEngineFromContext(c)
 	if err != nil {
 		return err
 	}
 
-	file, err := os.Create(outputPath)
+	file, err := os.Create(c.String("output"))
 	if err != nil {
 		return err
 	}
 
-	return e.RetrieveObject(file, name, version)
+	if c.Bool("latest") {
+		return e.RetrieveLatestVersionOfObject(file, c.String("name"))
+	}
+	return e.RetrieveObject(file, c.String("name"), c.Int("version"))
 }
 
 func makeEngineFromContext(c *cli.Context) (dibk.Engine, error) {
@@ -103,31 +101,11 @@ func parseStoreFlags(c *cli.Context) (string, string, error) {
 	return name, input, nil
 }
 
-func parseRetrieveFlags(c *cli.Context) (name string, version int, output string, err error) {
-	name = c.String("name")
-	version = c.Int("version")
-	output = c.String("output")
-
-	if name == "" {
-		err = fmt.Errorf("Could not find 'name' flag")
-	}
-
-	if version == 0 {
-		err = fmt.Errorf("Could not find 'version'")
-	}
-
-	if output == "" {
-		err = fmt.Errorf("Could not find 'output' flag")
-	}
-
-	return
-}
-
 func getCommonSubcommandFlags() []cli.Flag {
 	return []cli.Flag{
-		cli.BoolFlag{Name: "directio"},
-		cli.StringFlag{Name: "db"},
-		cli.StringFlag{Name: "storage"},
+		cli.BoolFlag{Name: "directio", Usage: "If enabled, use directIO to read and write files"},
+		cli.StringFlag{Name: "db", Usage: "Path to the SQLite3 database that holds metadata about the backups"},
+		cli.StringFlag{Name: "storage", Usage: "Path to the directory to use for storage"},
 	}
 }
 
@@ -147,9 +125,9 @@ func buildStoreCommand() cli.Command {
 		Name:  "store",
 		Usage: "Store a version of a binary",
 		Flags: append([]cli.Flag{
-			cli.StringFlag{Name: "name"},
-			cli.StringFlag{Name: "input"},
-			cli.IntFlag{Name: "mbperblock", Value: 10},
+			cli.StringFlag{Name: "name", Usage: "The name of the object to store"},
+			cli.StringFlag{Name: "input", Usage: "Path to the file to read"},
+			cli.IntFlag{Name: "mbperblock", Value: 10, Usage: "How many megabytes are in a block. Must be an integer"},
 		}, getCommonSubcommandFlags()...),
 		SkipFlagParsing: false,
 		HideHelp:        false,
@@ -176,16 +154,18 @@ func buildStoreCommand() cli.Command {
 }
 
 func buildRetrieveCommand() cli.Command {
-	requiredFlags := []string{"name", "output", "version", "db", "storage"}
-	usageText := "dibk retrieve " + buildRequiredFlagText(requiredFlags)
+	requiredFlags := []string{"name", "output", "db", "storage"}
+	usageText := "dibk retrieve --latest " + buildRequiredFlagText(requiredFlags) + "\n\t dibk retrieve --version $VERSION " + buildRequiredFlagText(requiredFlags)
 
 	return cli.Command{
-		Name:  "retrieve",
-		Usage: "Retrieve a version of a binary",
+		Name:      "retrieve",
+		Usage:     "Retrieve a version of a binary",
+		UsageText: usageText,
 		Flags: append([]cli.Flag{
-			cli.StringFlag{Name: "name"},
-			cli.IntFlag{Name: "version"},
-			cli.StringFlag{Name: "output"},
+			cli.StringFlag{Name: "name", Usage: "The name of the object to retrieve"},
+			cli.IntFlag{Name: "version", Value: 1, Usage: "Specify an object version to retrieve. Either this or --latest must be set"},
+			cli.StringFlag{Name: "output", Usage: "Path into which the retrieved object should be written"},
+			cli.BoolFlag{Name: "latest", Usage: "If enabled, fetch the latest version. Either this or --version must be set"},
 		}, getCommonSubcommandFlags()...),
 		SkipFlagParsing: false,
 		HideHelp:        false,
@@ -198,6 +178,13 @@ func buildRetrieveCommand() cli.Command {
 					fmt.Println("Usage: " + usageText)
 					return err
 				}
+			}
+
+			if !c.IsSet("latest") && !c.IsSet("version") {
+				err := fmt.Errorf("Neither \"latest\" nor \"version\" was set")
+				fmt.Println(err)
+				fmt.Println("Usage: " + usageText)
+				return err
 			}
 
 			err := retrieve(c)

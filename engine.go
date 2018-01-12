@@ -278,6 +278,16 @@ func (e *Engine) getNextVersionNumber(name string) (int, error) {
 	return ov.Version + 1, nil
 }
 
+// RetrieveLatestVersionOfObject writes the latest version of the object with the given name to the given file. If the object does not exist or any other errors occur, returns an error.
+func (e *Engine) RetrieveLatestVersionOfObject(file *os.File, name string) error {
+	ov, err := e.getLatestVersion(name)
+	if err != nil {
+		return err
+	}
+
+	return e.RetrieveObject(file, name, ov.Version)
+}
+
 // RetrieveObject retrieves a particular object version.
 func (e *Engine) RetrieveObject(file *os.File, name string, version int) error {
 	var count int64

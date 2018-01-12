@@ -13,11 +13,13 @@ We use [`glide`](https://github.com/Masterminds/glide) for dependency management
 ## Usage
 
 ```
-./dibk store --db $DB_PATH --mbperblock $BLOCK_SIZE --storage $STORAGE_LOCATION --name OBJECT_NAME --input INPUT_FILE
-./dibk retrieve --db $DB_PATH --blocksize $BLOCK_SIZE --storage $STORAGE_LOCATION --name OBJECT_NAME --version 1 --output OUTPUT_FILE
+./dibk store --db $DB_PATH --mbperblock $BLOCK_SIZE --storage $STORAGE_LOCATION --name $OBJECT_NAME --input $INPUT_FILE
+./dibk retrieve --db $DB_PATH --storage $STORAGE_LOCATION --name $OBJECT_NAME --latest --output OUTPUT_FILE
 ./dibk help
 ./dibk --version
 ```
+
+See `./dibk store --help` and `./dibk store --retrieve` for descriptions of the flags.
 
 ## Testing
 
