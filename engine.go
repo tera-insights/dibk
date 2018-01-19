@@ -185,7 +185,7 @@ func (e *Engine) isObjectNew(name string) (bool, error) {
 	return count == 0, err
 }
 
-func (e *Engine) shouldWriteBlock(ov ObjectVersion, blockIndex int, newBlockChecksum string) (bool, error) {
+func (e *Engine) isBlockNew(ov ObjectVersion, blockIndex int, newBlockChecksum string) (bool, error) {
 	isObjectNew, err := e.isObjectNew(ov.Name)
 	if err != nil {
 		return false, err
@@ -212,6 +212,22 @@ func (e *Engine) shouldWriteBlock(ov ObjectVersion, blockIndex int, newBlockChec
 
 	isBlockChanged := latestBlock.SHA1Checksum != newBlockChecksum
 	return isBlockChanged, nil
+}
+
+func (e *Engine) isFileContentNew(hash string) (bool, error) {
+	var count int
+	err := e.db.Model(&Block{}).Where(&Block{
+		SHA1Checksum: hash,
+	}).Count(&count).Error
+	return count > 0, err
+}
+
+func (e *Engine) getPathForBlockWithChecksum(hash string) (string, error) {
+	var b Block
+	err := e.db.First(&b, &Block{
+		SHA1Checksum: hash,
+	}).Error
+	return b.Location, err
 }
 
 func (e *Engine) openFileWithMode(path string, mode int) (*os.File, error) {
