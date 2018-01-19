@@ -1,7 +1,6 @@
 package edis
 
 import (
-	"directio"
 	"fmt"
 	"math/rand"
 	"os"
@@ -10,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+    "github.com/ncw/directio"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // Needed for Gorm
 	"github.com/spacemonkeygo/openssl"
 )

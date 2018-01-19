@@ -1,5 +1,5 @@
-hash: d4a8b916b26b04723ba58e2f0a38ad43e0b3a73fdcebb587e62f5b8bac443a9c
-updated: 2018-01-02T09:22:04.683578125-05:00
+hash: bcaaf4c4ab748fe4555ee8614d1b651d442bfc16b2f1a4d8a68aa814cd32b8ec
+updated: 2018-01-19T14:17:36.636571192-05:00
 imports:
 - name: github.com/jinzhu/gorm
   version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
@@ -9,6 +9,8 @@ imports:
   version: 74387dc39a75e970e7a3ae6a3386b5bd2e5c5cff
 - name: github.com/mattn/go-sqlite3
   version: e5a3c16c5c1d80b24f633e68aecd6b0702786d3d
+- name: github.com/ncw/directio
+  version: 17018d97cb6f2cd62f84c69903d327e596b7a93e
 - name: github.com/spacemonkeygo/openssl
   version: 4ea35d79e3ae2758eac37f0348cdc58aa167e78a
   subpackages:

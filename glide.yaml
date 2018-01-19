@@ -1,4 +1,4 @@
-package: edis
+package: github.com/tera-insights/edis
 import:
 - package: github.com/jinzhu/gorm
   version: v1.0
