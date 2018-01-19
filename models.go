@@ -2,7 +2,7 @@ package edis
 
 // Block is the Gorm model that represents a single block of the file.
 type Block struct {
-	SHA1Checksum string `gorm:"primary_key"`
+	SHA1Checksum string
 	Location     string
 	BlockIndex   int    `gorm:"unique_index:block_index_version_object_name"` // 0-based
 	Version      int    `gorm:"unique_index:block_index_version_object_name"`

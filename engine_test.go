@@ -61,6 +61,20 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	os.Remove(path)
 }
 
+func TestUploadingSameFileTwiceAsDifferentObjects(t *testing.T) {
+	objectName, path, file, err := createAndSaveNewJunkFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = e.SaveObject(file, objectName+"-foo", BlockSizeInBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Remove(path)
+}
+
 func createAndSaveNewJunkFile() (objectName string, path string, file *os.File, err error) {
 	objectName, path, file, err = createTemporaryFile()
 	if err != nil {
