@@ -1,12 +1,12 @@
 package main
 
 import (
-	"edis"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/tera-insights/edis"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/urfave/cli"
 )

@@ -9,8 +9,6 @@ test: vendor/
 
 vendor/: glide.lock glide.yaml
 	glide install
-	go install edis/vendor/github.com/mattn/go-sqlite3
-	go install edis/vendor/github.com/spacemonkeygo/openssl
 
 clean:
 	rm -r vendor
