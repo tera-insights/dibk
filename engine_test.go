@@ -2,6 +2,7 @@ package edis
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -9,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-    "github.com/ncw/directio"
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // Needed for Gorm
+	"github.com/ncw/directio"
 	"github.com/spacemonkeygo/openssl"
 )
 
@@ -61,7 +62,30 @@ func TestUploadingAndRetrievingSameFile(t *testing.T) {
 	os.Remove(path)
 }
 
+func getNumberOfUniqueLocations() (int, error) {
+	var b []Block
+	err := e.db.Find(&b).Error
+	if err != nil {
+		return len(b), nil
+	}
+
+	n := 0
+	locations := make(map[string]bool)
+	for i := range b {
+		if _, found := locations[b[i].Location]; !found {
+			n++
+			locations[b[i].Location] = true
+		}
+	}
+	return n, nil
+}
+
 func TestUploadingSameFileTwiceAsDifferentObjects(t *testing.T) {
+	nBlocksStarting, err := getNumberOfUniqueLocations()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	objectName, path, file, err := createAndSaveNewJunkFile()
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +94,16 @@ func TestUploadingSameFileTwiceAsDifferentObjects(t *testing.T) {
 	err = e.SaveObject(file, objectName+"-foo", BlockSizeInBytes)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	expectedNBlocks := int(math.Floor(DefaultJunkFileSizeInMB * 1024.0 * 1024 / BlockSizeInBytes))
+	nBlocksNow, err := getNumberOfUniqueLocations()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if nBlocksNow-nBlocksStarting != expectedNBlocks {
+		t.Fatal("Blocks were not reused")
 	}
 
 	os.Remove(path)

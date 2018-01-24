@@ -136,19 +136,28 @@ func (wp *fileWriterWorkerPool) startAsynchronousWriter() error {
 			}
 
 			blockChecksum := fmt.Sprintf("%x", hash)
-			shouldWrite, err := wp.e.shouldWriteBlock(wp.ov, task.blockNumber, blockChecksum)
+			isBlockNew, err := wp.e.isBlockNew(wp.ov, task.blockNumber, blockChecksum)
 			if err != nil {
 				panic(err)
 			}
 
-			if shouldWrite {
-				path, err := wp.e.writeBytesAsBlock(wp.ov, task.blockNumber, task.buffer)
-				if err != nil {
-					panic(err)
+			if isBlockNew {
+				var pathToBlock string
+				isFileContentNew, err := wp.e.isFileContentNew(blockChecksum)
+				if !isFileContentNew {
+					pathToBlock, err = wp.e.writeBytesAsBlock(wp.ov, task.blockNumber, task.buffer)
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					pathToBlock, err = wp.e.getPathForBlockWithChecksum(blockChecksum)
+					if err != nil {
+						panic(err)
+					}
 				}
 
 				go func() {
-					wp.finished <- blockWriteResult{path, true, task.blockNumber, blockChecksum}
+					wp.finished <- blockWriteResult{pathToBlock, true, task.blockNumber, blockChecksum}
 				}()
 			} else {
 				go func() {
